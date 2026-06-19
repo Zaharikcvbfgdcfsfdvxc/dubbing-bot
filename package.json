@@ -1,0 +1,21 @@
+{
+  "name": "dubbing-tool",
+  "version": "1.0.0",
+  "description": "Telegram bot for dubbing audio replicas.",
+  "main": "src/index.js",
+  "scripts": {
+    "start": "node src/index.js",
+    "dev": "nodemon src/index.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "dependencies": {
+    "jszip": "^3.10.1",
+    "grammy": "^1.21.0",
+    "better-sqlite3": "^11.0.0"
+  },
+  "devDependencies": {
+    "nodemon": "^2.0.7"
+  },
+  "author": "",
+  "license": "ISC"
+}
