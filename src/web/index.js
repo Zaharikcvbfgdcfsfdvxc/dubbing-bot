@@ -47,13 +47,13 @@ app.post('/api/reject', (req, res) => {
   const info = db.getDubById(dubId);
 
   if (info && botInstance) {
-    const msg = `❌ *Отбраковка*\n\n` +
-      `Твоя запись реплики *#${info.media_id}* ` +
+    const msg = `❌ <b>Отбраковка</b>\n\n` +
+      `Твоя запись реплики <b>#${info.media_id}</b> ` +
       `(${info.project_name} / ${info.character_name}) была отбракована.\n\n` +
       `Отправь /start → выбери персонажа → перезапиши эту реплику.`;
 
     console.log(`[web] Sending reject notification to telegram_id=${info.telegram_id}`);
-    botInstance.api.sendMessage(info.telegram_id, msg, { parse_mode: 'Markdown' })
+    botInstance.api.sendMessage(info.telegram_id, msg, { parse_mode: 'HTML' })
       .then(() => console.log(`[web] Reject notification sent to ${info.telegram_id}`))
       .catch(err => console.error('[web] Failed to notify user:', err.message, err));
   } else {
