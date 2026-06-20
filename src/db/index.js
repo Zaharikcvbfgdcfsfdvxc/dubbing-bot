@@ -201,6 +201,27 @@ function discardDub(dubId) {
   `).run(dubId);
 }
 
+function rejectDub(dubId) {
+  const db = getDb();
+  return db.prepare(`
+    UPDATE user_dubs SET status = 'rejected' WHERE id = ?
+  `).run(dubId);
+}
+
+function getDubById(dubId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT d.*, r.media_id, r.transcript, c.name as character_name, p.name as project_name,
+           u.telegram_id, u.username
+    FROM user_dubs d
+    JOIN users u ON d.user_id = u.id
+    JOIN replicas r ON d.replica_id = r.id
+    JOIN characters c ON r.character_id = c.id
+    JOIN projects p ON c.project_id = p.id
+    WHERE d.id = ?
+  `).get(dubId);
+}
+
 function getNextPendingReplica(userId, characterId) {
   const db = getDb();
   return db.prepare(`
@@ -213,6 +234,17 @@ function getNextPendingReplica(userId, characterId) {
     ORDER BY r.sort_order, r.filename
     LIMIT 1
   `).get(characterId, userId);
+}
+
+function getRejectedReplicas(userId, characterId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT r.*, d.id as dub_id, d.status as dub_status
+    FROM replicas r
+    JOIN user_dubs d ON d.replica_id = r.id
+    WHERE r.character_id = ? AND d.user_id = ? AND d.status = 'rejected'
+    ORDER BY r.sort_order, r.filename
+  `).all(characterId, userId);
 }
 
 function getPendingCount(userId, characterId) {
@@ -339,7 +371,7 @@ function getDubsReport(characterId) {
 function getAllDubsReport() {
   const db = getDb();
   return db.prepare(`
-    SELECT p.name as project, c.name as character, r.media_id,
+    SELECT d.id as dub_id, p.name as project, c.name as character, r.media_id,
            u.username, u.first_name, u.telegram_id,
            d.status, d.audio_path, d.created_at
     FROM user_dubs d
@@ -381,7 +413,10 @@ module.exports = {
   getOrCreateDub,
   submitDub,
   discardDub,
+  rejectDub,
+  getDubById,
   getNextPendingReplica,
+  getRejectedReplicas,
   getPendingCount,
   getSubmittedCount,
   getTotalReplicasCount,

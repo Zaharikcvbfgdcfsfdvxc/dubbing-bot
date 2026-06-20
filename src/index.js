@@ -1,12 +1,12 @@
 const { createBot } = require('./bot/index');
 const { startWeb } = require('./web/index');
 
-// Start web interface
-startWeb();
+const { bot, startBot } = createBot();
+
+// Start web interface (with bot instance for notifications)
+startWeb(bot);
 
 // Start Telegram bot
-const { startBot } = createBot();
-
 if (startBot) {
   startBot();
 } else {

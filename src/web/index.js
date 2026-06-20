@@ -6,8 +6,10 @@ const db = require('../db/index');
 const app = express();
 const PORT = process.env.WEB_PORT || 3001;
 
-// Serve static files
+app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+let botInstance = null;
 
 // API: all dubs grouped by project/character/replica
 app.get('/api/dubs', (req, res) => {
@@ -23,6 +25,7 @@ app.get('/api/dubs', (req, res) => {
     }
     const who = r.username ? `@${r.username}` : (r.first_name || String(r.telegram_id));
     projects[r.project][r.character].push({
+      dub_id: r.dub_id,
       media_id: r.media_id,
       user: who,
       telegram_id: r.telegram_id,
@@ -33,6 +36,27 @@ app.get('/api/dubs', (req, res) => {
   }
 
   res.json(projects);
+});
+
+// API: reject a dub
+app.post('/api/reject', (req, res) => {
+  const { dubId } = req.body;
+  if (!dubId) return res.status(400).json({ error: 'dubId required' });
+
+  const dub = db.rejectDub(dubId);
+  const info = db.getDubById(dubId);
+
+  if (info && botInstance) {
+    const msg = `❌ *Отбраковка*\n\n` +
+      `Твоя запись реплики *#${info.media_id}* ` +
+      `(${info.project_name} / ${info.character_name}) была отбракована.\n\n` +
+      `Отправь /start → выбери персонажа → перезапиши эту реплику.`;
+
+    botInstance.api.sendMessage(info.telegram_id, msg, { parse_mode: 'Markdown' })
+      .catch(err => console.error('[web] Failed to notify user:', err.message));
+  }
+
+  res.json({ ok: true, dub: info });
 });
 
 // API: all replicas with transcripts
@@ -81,7 +105,8 @@ app.get('/api/original', (req, res) => {
   fs.createReadStream(filePath).pipe(res);
 });
 
-function startWeb() {
+function startWeb(bot) {
+  botInstance = bot;
   app.listen(PORT, () => {
     console.log(`[web] Interface running on http://localhost:${PORT}`);
   });
