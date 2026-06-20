@@ -39,10 +39,34 @@ switch (command) {
     }
     break;
 
+  case 'dubs':
+    const report = db.getAllDubsReport();
+    if (report.length === 0) {
+      console.log('No submitted dubs yet.');
+    } else {
+      console.log('Submitted dubs:');
+      let lastProj = '', lastChar = '';
+      for (const r of report) {
+        if (r.project !== lastProj) {
+          console.log(`\n${r.project}/`);
+          lastProj = r.project;
+          lastChar = '';
+        }
+        if (r.character !== lastChar) {
+          console.log(`  ${r.character}:`);
+          lastChar = r.character;
+        }
+        const who = r.username ? `@${r.username}` : (r.first_name || r.telegram_id);
+        console.log(`    #${r.media_id} — ${who} (${r.created_at})`);
+      }
+    }
+    break;
+
   default:
     console.log('Dubbing Bot CLI');
     console.log('  node src/cli.js scan   — scan data/ into database');
     console.log('  node src/cli.js stats  — show statistics');
     console.log('  node src/cli.js list   — list projects & characters');
+    console.log('  node src/cli.js dubs   — who recorded what');
     break;
 }

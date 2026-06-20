@@ -9,6 +9,7 @@
     "scan": "node src/cli.js scan",
     "stats": "node src/cli.js stats",
     "list": "node src/cli.js list",
+    "dubs": "node src/cli.js dubs",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

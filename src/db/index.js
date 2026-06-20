@@ -310,6 +310,37 @@ function getAllCharactersWithAssignments() {
   `).all();
 }
 
+// --- Dubs report ---
+
+function getDubsReport(characterId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT u.telegram_id, u.username, u.first_name, r.media_id, r.transcript,
+           d.status, d.audio_path, d.created_at
+    FROM user_dubs d
+    JOIN users u ON d.user_id = u.id
+    JOIN replicas r ON d.replica_id = r.id
+    WHERE r.character_id = ?
+    ORDER BY u.username, r.sort_order
+  `).all(characterId);
+}
+
+function getAllDubsReport() {
+  const db = getDb();
+  return db.prepare(`
+    SELECT p.name as project, c.name as character, r.media_id,
+           u.username, u.first_name, u.telegram_id,
+           d.status, d.created_at
+    FROM user_dubs d
+    JOIN users u ON d.user_id = u.id
+    JOIN replicas r ON d.replica_id = r.id
+    JOIN characters c ON r.character_id = c.id
+    JOIN projects p ON c.project_id = p.id
+    WHERE d.status = 'submitted'
+    ORDER BY p.name, c.name, r.sort_order
+  `).all();
+}
+
 // --- Stats ---
 
 function getStats() {
@@ -350,5 +381,7 @@ module.exports = {
   getCharactersWithAssignments,
   getAssignmentByCharacter,
   getAllCharactersWithAssignments,
+  getDubsReport,
+  getAllDubsReport,
   getStats,
 };
