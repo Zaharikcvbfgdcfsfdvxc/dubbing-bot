@@ -6,6 +6,9 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "nodemon src/index.js",
+    "scan": "node src/cli.js scan",
+    "stats": "node src/cli.js stats",
+    "list": "node src/cli.js list",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
