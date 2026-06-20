@@ -42,6 +42,8 @@ function initTables() {
       project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
       name TEXT NOT NULL,
       folder_path TEXT NOT NULL,
+      assigned_telegram_id INTEGER DEFAULT NULL,
+      preview_limit INTEGER DEFAULT 0,
       UNIQUE(project_id, name)
     );
 
@@ -71,6 +73,8 @@ function initTables() {
   // Migration: add columns that may not exist in older DBs
   try { db.exec('ALTER TABLE replicas ADD COLUMN media_id TEXT DEFAULT \'\''); } catch {}
   try { db.exec('ALTER TABLE replicas ADD COLUMN duration REAL DEFAULT 0'); } catch {}
+  try { db.exec('ALTER TABLE characters ADD COLUMN assigned_telegram_id INTEGER DEFAULT NULL'); } catch {}
+  try { db.exec('ALTER TABLE characters ADD COLUMN preview_limit INTEGER DEFAULT 0'); } catch {}
 }
 
 // --- User queries ---
@@ -251,6 +255,61 @@ function clearProjectData() {
   db.exec('DELETE FROM projects');
 }
 
+// --- Assignment queries ---
+
+function assignUserToCharacter(characterId, telegramId) {
+  const db = getDb();
+  return db.prepare(
+    'UPDATE characters SET assigned_telegram_id = ? WHERE id = ?'
+  ).run(telegramId, characterId);
+}
+
+function unassignCharacter(characterId) {
+  const db = getDb();
+  return db.prepare(
+    'UPDATE characters SET assigned_telegram_id = NULL WHERE id = ?'
+  ).run(characterId);
+}
+
+function setPreviewLimit(characterId, limit) {
+  const db = getDb();
+  return db.prepare(
+    'UPDATE characters SET preview_limit = ? WHERE id = ?'
+  ).run(limit, characterId);
+}
+
+function getCharactersWithAssignments(projectId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT c.*, u.username as assigned_username, u.first_name as assigned_first_name
+    FROM characters c
+    LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id
+    WHERE c.project_id = ?
+    ORDER BY c.name
+  `).all(projectId);
+}
+
+function getAssignmentByCharacter(characterId) {
+  const db = getDb();
+  return db.prepare(`
+    SELECT c.*, u.username as assigned_username, u.first_name as assigned_first_name
+    FROM characters c
+    LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id
+    WHERE c.id = ?
+  `).get(characterId);
+}
+
+function getAllCharactersWithAssignments() {
+  const db = getDb();
+  return db.prepare(`
+    SELECT c.*, p.name as project_name, u.username as assigned_username, u.first_name as assigned_first_name
+    FROM characters c
+    JOIN projects p ON c.project_id = p.id
+    LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id
+    ORDER BY p.name, c.name
+  `).all();
+}
+
 // --- Stats ---
 
 function getStats() {
@@ -285,5 +344,11 @@ module.exports = {
   getSubmittedCount,
   getTotalReplicasCount,
   clearProjectData,
+  assignUserToCharacter,
+  unassignCharacter,
+  setPreviewLimit,
+  getCharactersWithAssignments,
+  getAssignmentByCharacter,
+  getAllCharactersWithAssignments,
   getStats,
 };

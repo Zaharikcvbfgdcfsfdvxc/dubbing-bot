@@ -159,6 +159,28 @@ async function sendNextReplica(ctx, character) {
   const userId = db.getUserByTelegramId(ctx.from.id);
   if (!userId) return ctx.reply(MSG.error, { parse_mode: 'Markdown' });
 
+  // Check permission: assigned user can dub all, others limited to preview_limit
+  const charInfo = db.getAssignmentByCharacter(character.id);
+  if (charInfo && charInfo.assigned_telegram_id && charInfo.preview_limit > 0) {
+    const isAssigned = charInfo.assigned_telegram_id === ctx.from.id;
+    if (!isAssigned) {
+      const submitted = db.getSubmittedCount(userId.id, character.id);
+      if (submitted >= charInfo.preview_limit) {
+        ctx.session.state = 'SELECTING_CHARACTER';
+        ctx.session.characterId = null;
+        return ctx.reply(
+          `🔒 *${character.name}* доступен только для назначенного пользователя.\n\n` +
+          `Ты можешь озвучить только первые ${charInfo.preview_limit} реплик (уже озвучено: ${submitted}).\n\n` +
+          `Выбери другого персонажа:`,
+          {
+            parse_mode: 'Markdown',
+            reply_markup: characterListKeyboard(db.getCharactersByProject(ctx.session.projectId)),
+          }
+        );
+      }
+    }
+  }
+
   const replica = db.getNextPendingReplica(userId.id, character.id);
 
   if (!replica) {

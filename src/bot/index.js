@@ -2,7 +2,8 @@ const { Bot, session } = require('grammy');
 const { handleStart, handleRescan, handleStats, handleHelp } = require('./handlers/start');
 const { handleCallback } = require('./handlers/callback');
 const { handleVoice } = require('./handlers/voice');
-const { handleUploadCommand, handleDocument } = require('./handlers/upload');
+const { handleUploadCommand, handleDocument, handleUploadText } = require('./handlers/upload');
+const { handleAdminCommand, handleAdminCallback, handleAdminMessage } = require('./handlers/admin');
 const { scanDataDir } = require('./scanner');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
@@ -28,6 +29,9 @@ function createBot() {
       characterId: null,
       currentDubId: null,
       _lastVoicePath: null,
+      isAdmin: false,
+      _adminAction: null,
+      _adminCharId: null,
     }),
   }));
 
@@ -37,8 +41,17 @@ function createBot() {
   bot.command('stats', handleStats);
   bot.command('help', handleHelp);
   bot.command('upload', handleUploadCommand);
+  bot.command('admin', handleAdminCommand);
 
-  // --- Callback query handler (inline buttons) ---
+  // --- Admin callback handler (before main to catch admin:*) ---
+  bot.on('callback_query:data', (ctx, next) => {
+    if (ctx.callbackQuery.data.startsWith('admin:')) {
+      return handleAdminCallback(ctx);
+    }
+    return next();
+  });
+
+  // --- Main callback query handler (inline buttons) ---
   bot.on('callback_query:data', handleCallback);
 
   // --- Voice message handler ---
@@ -46,6 +59,12 @@ function createBot() {
 
   // --- Document handler (ZIP upload) ---
   bot.on('message:document', handleDocument);
+
+  // --- Upload text handler (project name for character ZIP) ---
+  bot.on('message:text', handleUploadText);
+
+  // --- Admin message handler (text input during assign/setlimit) ---
+  bot.on('message:text', handleAdminMessage);
 
   // --- Fallback for non-voice messages during dubbing ---
   bot.on('message', (ctx, next) => {

@@ -33,10 +33,11 @@ src/
     transcriptParser.js        ← парсер TXT-транскрипций
 data/
   {project}/
-    {media_id}/
-      original.wav             ← аудио реплики
-      transcript.txt           ← Оригинал: / Перевод:
-      info.json                ← {media_id, character, duration}
+    {character}/
+      {media_id}/
+        original.wav           ← аудио реплики
+        transcript.txt         ← Оригинал: / Перевод:
+        info.json              ← {media_id, character, duration}
 ```
 
 ## Установка
@@ -84,18 +85,29 @@ docker run -e BOT_TOKEN="..." -v $(pwd)/data:/app/data dubbing-bot
 | `/upload` | Загрузить проект (ZIP-архив) |
 | `/rescan` | Пересканировать папку `data/` |
 | `/stats` | Статистика |
+| `/admin <пароль>` | Админ-панель |
 | `/help` | Справка |
+
+### Админ-панель
+
+`/admin <пароль>` (по умолчанию `admin123`, задаётся в `ADMIN_PASSWORD`)
+
+- **Назначение пользователей** — привязать Telegram-пользователя к персонажу
+- **Превью-лимит** — назначенный пользователь озвучивает все реплики, остальные — только первые N (по умолчанию 3)
+- **Снятие назначения** — персонаж снова доступен всем
 
 ### Загрузка проекта
 
 1. Подготовь ZIP-архив со структурой:
    ```
    ProjectName/
-     {media_id}/
-       original.wav
-       transcript.txt
-       info.json
+     CharacterName/
+       {media_id}/
+         original.wav
+         transcript.txt
+         info.json
    ```
+   Или только папку персонажа — бот спросит имя проекта.
 2. Отправь `/upload` боту и пришли ZIP
 3. Бот распакует и проиндексирует
 
@@ -114,14 +126,11 @@ English text here
 ```
 data/
   CaptainAmerica/
-    1005818535/
-      original.wav
-      transcript.txt
-      info.json
-    1006008518/
-      original.wav
-      transcript.txt
-      info.json
+    Captain America/
+      1005818535/
+        original.wav
+        transcript.txt
+        info.json
 ```
 
 Достаточно скопировать папки в `data/` и выполнить `/rescan`.

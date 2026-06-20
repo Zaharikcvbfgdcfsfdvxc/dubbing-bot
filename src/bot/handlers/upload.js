@@ -8,6 +8,9 @@ const MSG = require('../messages');
 // Track which users are in "waiting for ZIP" state (simple Set, not session-based)
 const waitingForZip = new Set();
 
+// Track upload type: 'project' (full) or 'character' (needs project name)
+const uploadContext = new Map(); // userId -> { type: 'project'|'character', zipBuffer? }
+
 /**
  * Handle /upload command.
  * Prompts admin to send a ZIP file.
@@ -74,32 +77,71 @@ async function handleDocument(ctx) {
   }
 
   waitingForZip.delete(userId);
-  const statusMsg = await ctx.reply('⏳ Скачиваю и распаковываю архив...');
+  const statusMsg = await ctx.reply('⏳ Скачиваю архив...');
 
   try {
     const file = await ctx.api.getFile(doc.file_id);
     const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
     const zipBuffer = await downloadBuffer(fileUrl);
     const zip = await JSZip.loadAsync(zipBuffer);
-    await extractProjectZip(zip, DATA_DIR);
 
-    await ctx.api.editMessageText(
-      statusMsg.chat.id,
-      statusMsg.message_id,
-      '✅ Архив распакован. Сканирую реплики...'
-    );
+    // Detect ZIP type: project (has character folders) or character (has media_id folders)
+    const topEntries = Object.keys(zip.files)
+      .map(p => p.replace(/\\/g, '/').split('/')[0])
+      .filter((v, i, a) => a.indexOf(v) === i && v !== '' && !v.startsWith('.'));
 
-    const stats = scanDataDir();
+    if (topEntries.length === 0) {
+      return ctx.reply('❌ Архив пуст.');
+    }
 
-    await ctx.api.deleteMessage(statusMsg.chat.id, statusMsg.message_id).catch(() => {});
-    return ctx.reply(
-      `✅ *Проект загружен и проиндексирован!*\n\n` +
-      `📁 Проектов: ${stats.projects}\n` +
-      `🎭 Персонажей: ${stats.characters}\n` +
-      `🎬 Реплик: ${stats.replicas}\n\n` +
-      `Отправь /start чтобы начать озвучку.`,
-      { parse_mode: 'Markdown' }
-    );
+    // Check if top entry contains media_id subfolders (character ZIP)
+    // A character ZIP: top/1005818535/original.wav → top is character folder
+    // A project ZIP: top/CharacterName/1005818535/original.wav → top is project
+    let isCharacterZip = false;
+    for (const entry of topEntries) {
+      const subPaths = Object.keys(zip.files)
+        .filter(p => p.startsWith(entry + '/') || p.startsWith(entry + '\\'))
+        .map(p => p.replace(/\\/g, '/').split('/')[1])
+        .filter((v, i, a) => v && a.indexOf(v) === i);
+
+      // If sub-entries contain folders with 'original.wav' or 'info.json', it's a character ZIP
+      for (const sub of subPaths) {
+        if (zip.files[`${entry}/${sub}/original.wav`] || zip.files[`${entry}\\${sub}\\original.wav`] ||
+            zip.files[`${entry}/${sub}/info.json`] || zip.files[`${entry}\\${sub}\\info.json`]) {
+          isCharacterZip = true;
+          break;
+        }
+      }
+      if (isCharacterZip) break;
+    }
+
+    if (isCharacterZip) {
+      // Character ZIP — needs project name
+      uploadContext.set(userId, { type: 'character', zipBuffer, zip });
+      await ctx.api.deleteMessage(statusMsg.chat.id, statusMsg.message_id).catch(() => {});
+      return ctx.reply(
+        '📦 Архив содержит папку персонажа.\n\n' +
+        'Введи *название проекта*, в который добавить персонажа:\n\n' +
+        `Найден персонаж: \`${topEntries[0]}\``,
+        {
+          parse_mode: 'Markdown',
+          reply_markup: { inline_keyboard: [[{ text: '❌ Отмена', callback_data: 'cancel_upload' }]] },
+        }
+      );
+    } else {
+      // Full project ZIP
+      await extractProjectZip(zip, DATA_DIR);
+      await ctx.api.editMessageText(statusMsg.chat.id, statusMsg.message_id, '✅ Распаковано. Сканирую...');
+
+      const stats = scanDataDir();
+      await ctx.api.deleteMessage(statusMsg.chat.id, statusMsg.message_id).catch(() => {});
+      return ctx.reply(
+        `✅ *Проект загружен!*\n\n` +
+        `📁 Проектов: ${stats.projects}\n🎭 Персонажей: ${stats.characters}\n🎬 Реплик: ${stats.replicas}\n\n` +
+        `/start чтобы начать озвучку.`,
+        { parse_mode: 'Markdown' }
+      );
+    }
   } catch (err) {
     console.error('[upload] Error:', err);
     return ctx.reply('❌ Ошибка при обработке архива: ' + (err.message || 'неизвестная ошибка'));
@@ -133,8 +175,49 @@ async function extractProjectZip(zip, destDir) {
   }
 }
 
+/**
+ * Handle text input during upload flow (project name for character ZIP).
+ */
+async function handleUploadText(ctx) {
+  const userId = ctx.from.id;
+  const context = uploadContext.get(userId);
+
+  if (!context || context.type !== 'character') return;
+
+  uploadContext.delete(userId);
+  const projectName = ctx.message.text.trim();
+
+  if (!projectName || projectName.length > 100) {
+    return ctx.reply('❌ Некорректное название проекта. /upload — начать заново.');
+  }
+
+  const statusMsg = await ctx.reply('⏳ Распаковываю...');
+
+  try {
+    // Extract into data/{projectName}/ preserving character subfolder
+    const destDir = path.join(DATA_DIR, projectName);
+    await extractProjectZip(context.zip, destDir);
+
+    await ctx.api.editMessageText(statusMsg.chat.id, statusMsg.message_id, '✅ Сканирую реплики...');
+
+    const stats = scanDataDir();
+
+    await ctx.api.deleteMessage(statusMsg.chat.id, statusMsg.message_id).catch(() => {});
+    return ctx.reply(
+      `✅ *Проект "${projectName}" загружен!*\n\n` +
+      `📁 Проектов: ${stats.projects}\n🎭 Персонажей: ${stats.characters}\n🎬 Реплик: ${stats.replicas}\n\n` +
+      `/start чтобы начать озвучку.`,
+      { parse_mode: 'Markdown' }
+    );
+  } catch (err) {
+    console.error('[upload] Error:', err);
+    return ctx.reply('❌ Ошибка: ' + (err.message || 'неизвестная ошибка'));
+  }
+}
+
 module.exports = {
   handleUploadCommand,
   handleCancelUpload,
   handleDocument,
+  handleUploadText,
 };
