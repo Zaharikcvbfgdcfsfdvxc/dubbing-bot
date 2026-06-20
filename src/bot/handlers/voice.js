@@ -1,6 +1,6 @@
 const path = require('path');
 const fs = require('fs');
-const db = require('../db/index');
+const db = require('../../db/index');
 const MSG = require('../messages');
 const { reviewKeyboard } = require('../keyboards');
 const { downloadBuffer } = require('../utils');

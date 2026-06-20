@@ -1,6 +1,6 @@
 const fs = require('fs');
 const { InputFile } = require('grammy');
-const db = require('../db/index');
+const db = require('../../db/index');
 const MSG = require('../messages');
 const { handleCancelUpload } = require('./upload');
 const {

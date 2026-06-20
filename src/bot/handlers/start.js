@@ -1,4 +1,4 @@
-const db = require('../db/index');
+const db = require('../../db/index');
 const MSG = require('../messages');
 const { projectListKeyboard, backToProjectsKeyboard } = require('../keyboards');
 
