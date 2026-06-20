@@ -57,7 +57,37 @@ switch (command) {
           lastChar = r.character;
         }
         const who = r.username ? `@${r.username}` : (r.first_name || r.telegram_id);
-        console.log(`    #${r.media_id} — ${who} (${r.created_at})`);
+        const audio = r.audio_path ? ' 🎤' : '';
+        console.log(`    #${r.media_id} — ${who}${audio} (${r.created_at})`);
+      }
+    }
+    break;
+
+  case 'recordings':
+    const path = require('path');
+    const fs = require('fs');
+    const recDir = path.join(__dirname, '..', 'data', 'recordings');
+    if (!fs.existsSync(recDir)) {
+      console.log('No recordings yet.');
+      break;
+    }
+    const dubsReport = db.getAllDubsReport();
+    const dubMap = {};
+    for (const d of dubsReport) {
+      dubMap[d.telegram_id + '_' + d.media_id] = d;
+    }
+    const users = fs.readdirSync(recDir);
+    for (const uid of users) {
+      const userDir = path.join(recDir, uid);
+      if (!fs.statSync(userDir).isDirectory()) continue;
+      const files = fs.readdirSync(userDir).filter(f => f.endsWith('.ogg'));
+      if (files.length === 0) continue;
+      console.log(`\nUser ${uid}:`);
+      for (const f of files) {
+        const filePath = path.join(userDir, f);
+        const stat = fs.statSync(filePath);
+        const sizeKb = (stat.size / 1024).toFixed(0);
+        console.log(`  ${f} (${sizeKb} KB)`);
       }
     }
     break;
@@ -67,6 +97,7 @@ switch (command) {
     console.log('  node src/cli.js scan   — scan data/ into database');
     console.log('  node src/cli.js stats  — show statistics');
     console.log('  node src/cli.js list   — list projects & characters');
-    console.log('  node src/cli.js dubs   — who recorded what');
+    console.log('  node src/cli.js dubs        — who recorded what');
+    console.log('  node src/cli.js recordings  — list audio files');
     break;
 }

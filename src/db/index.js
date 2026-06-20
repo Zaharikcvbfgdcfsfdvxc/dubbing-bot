@@ -341,7 +341,7 @@ function getAllDubsReport() {
   return db.prepare(`
     SELECT p.name as project, c.name as character, r.media_id,
            u.username, u.first_name, u.telegram_id,
-           d.status, d.created_at
+           d.status, d.audio_path, d.created_at
     FROM user_dubs d
     JOIN users u ON d.user_id = u.id
     JOIN replicas r ON d.replica_id = r.id
