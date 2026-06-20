@@ -52,8 +52,12 @@ app.post('/api/reject', (req, res) => {
       `(${info.project_name} / ${info.character_name}) была отбракована.\n\n` +
       `Отправь /start → выбери персонажа → перезапиши эту реплику.`;
 
+    console.log(`[web] Sending reject notification to telegram_id=${info.telegram_id}`);
     botInstance.api.sendMessage(info.telegram_id, msg, { parse_mode: 'Markdown' })
-      .catch(err => console.error('[web] Failed to notify user:', err.message));
+      .then(() => console.log(`[web] Reject notification sent to ${info.telegram_id}`))
+      .catch(err => console.error('[web] Failed to notify user:', err.message, err));
+  } else {
+    console.log(`[web] Cannot notify: botInstance=${!!botInstance}, info=${!!info}`);
   }
 
   res.json({ ok: true, dub: info });
