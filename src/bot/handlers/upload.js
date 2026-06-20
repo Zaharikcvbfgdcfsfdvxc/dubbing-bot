@@ -71,6 +71,16 @@ async function handleDocument(ctx) {
     return ctx.reply('❌ Отправь ZIP-файл (с расширением .zip).');
   }
 
+  // Telegram Bot API cannot download files > 20 MB
+  if (doc.file_size > 20 * 1024 * 1024) {
+    waitingForZip.delete(userId);
+    const sizeMb = (doc.file_size / 1024 / 1024).toFixed(1);
+    return ctx.reply(
+      `❌ Файл слишком большой: ${sizeMb} МБ (макс. 20 МБ для ботов).\n\n` +
+      `Разбей архив на части или загрузи файлы напрямую в папку data/ на сервере.`
+    );
+  }
+
   waitingForZip.delete(userId);
   const statusMsg = await ctx.reply('⏳ Скачиваю архив...');
 
