@@ -152,14 +152,14 @@ function getReplicaById(id) {
 function upsertReplica(characterId, mediaId, filename, transcript, translation, filePath, sortOrder, duration) {
   const db = getDb();
   const existing = db.prepare(
-    'SELECT id FROM replicas WHERE character_id = ? AND filename = ?'
-  ).get(characterId, filename);
+    'SELECT id FROM replicas WHERE character_id = ? AND media_id = ?'
+  ).get(characterId, mediaId);
 
   if (existing) {
     db.prepare(`
-      UPDATE replicas SET media_id = ?, transcript = ?, translation = ?, file_path = ?, sort_order = ?, duration = ?
+      UPDATE replicas SET filename = ?, transcript = ?, translation = ?, file_path = ?, sort_order = ?, duration = ?
       WHERE id = ?
-    `).run(mediaId, transcript, translation, filePath, sortOrder, duration || 0, existing.id);
+    `).run(filename, transcript, translation, filePath, sortOrder, duration || 0, existing.id);
     return existing.id;
   } else {
     return db.prepare(`
