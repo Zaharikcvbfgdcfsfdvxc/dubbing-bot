@@ -249,10 +249,21 @@ function getTotalReplicasCount(characterId) {
 
 function clearProjectData() {
   const db = getDb();
-  db.exec('DELETE FROM user_dubs');
+  // Never delete user_dubs — preserves recordings
   db.exec('DELETE FROM replicas');
   db.exec('DELETE FROM characters');
   db.exec('DELETE FROM projects');
+}
+
+function clearOrphanedReplicas() {
+  const db = getDb();
+  // Delete replicas that have no dubs and no longer exist on disk
+  // (safe cleanup — won't delete anything with recordings)
+  db.exec(`
+    DELETE FROM replicas WHERE id NOT IN (
+      SELECT DISTINCT replica_id FROM user_dubs
+    )
+  `);
 }
 
 // --- Assignment queries ---
@@ -375,6 +386,7 @@ module.exports = {
   getSubmittedCount,
   getTotalReplicasCount,
   clearProjectData,
+  clearOrphanedReplicas,
   assignUserToCharacter,
   unassignCharacter,
   setPreviewLimit,

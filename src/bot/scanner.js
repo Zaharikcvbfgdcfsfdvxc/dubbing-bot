@@ -44,8 +44,6 @@ function scanDataDir() {
     return { projects: 0, characters: 0, replicas: 0 };
   }
 
-  db.clearProjectData();
-
   const projectFolders = fs.readdirSync(DATA_DIR).filter(name => {
     const fullPath = path.join(DATA_DIR, name);
     return fs.statSync(fullPath).isDirectory();
