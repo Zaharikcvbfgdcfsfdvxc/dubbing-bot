@@ -183,11 +183,11 @@ async function extractProjectZip(zip, destDir) {
 /**
  * Handle text input during upload flow (project name for character ZIP).
  */
-async function handleUploadText(ctx) {
+async function handleUploadText(ctx, next) {
   const userId = ctx.from.id;
   const context = uploadContext.get(userId);
 
-  if (!context || context.type !== 'character') return;
+  if (!context || context.type !== 'character') return next();
 
   uploadContext.delete(userId);
   const projectName = ctx.message.text.trim();

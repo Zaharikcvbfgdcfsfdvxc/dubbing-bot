@@ -94,9 +94,9 @@ async function handleAdminCallback(ctx) {
 /**
  * Handle text messages during admin assign/setlimit flows.
  */
-async function handleAdminMessage(ctx) {
+async function handleAdminMessage(ctx, next) {
   const session = ctx.session;
-  if (!session.isAdmin) return;
+  if (!session.isAdmin) return next();
 
   const text = ctx.message.text.trim();
 
@@ -107,6 +107,8 @@ async function handleAdminMessage(ctx) {
   if (session._adminAction === 'setlimit' && session._adminCharId) {
     return doSetLimit(ctx, text);
   }
+
+  return next();
 }
 
 // --- Show lists ---
