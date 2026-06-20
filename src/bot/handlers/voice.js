@@ -53,12 +53,6 @@ async function handleVoice(ctx) {
     return ctx.reply(MSG.noVoice, { parse_mode: 'Markdown' });
   }
 
-  // Telegram voice messages are limited to ~20MB — should be fine
-  // But we check anyway
-  if (voice.file_size > 20 * 1024 * 1024) {
-    return ctx.reply(MSG.voiceTooBig, { parse_mode: 'Markdown' });
-  }
-
   try {
     // Get file info from Telegram
     const file = await ctx.api.getFile(voice.file_id);

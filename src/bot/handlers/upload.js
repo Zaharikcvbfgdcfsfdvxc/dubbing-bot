@@ -71,11 +71,6 @@ async function handleDocument(ctx) {
     return ctx.reply('❌ Отправь ZIP-файл (с расширением .zip).');
   }
 
-  if (doc.file_size > 50 * 1024 * 1024) {
-    waitingForZip.delete(userId);
-    return ctx.reply('❌ Файл слишком большой (макс. 50 МБ).');
-  }
-
   waitingForZip.delete(userId);
   const statusMsg = await ctx.reply('⏳ Скачиваю архив...');
 
