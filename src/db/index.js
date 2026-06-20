@@ -48,10 +48,12 @@ function initTables() {
     CREATE TABLE IF NOT EXISTS replicas (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
+      media_id TEXT DEFAULT '',
       filename TEXT NOT NULL,
       transcript TEXT DEFAULT '',
       translation TEXT DEFAULT '',
       file_path TEXT NOT NULL,
+      duration REAL DEFAULT 0,
       sort_order INTEGER DEFAULT 0
     );
 
@@ -65,6 +67,10 @@ function initTables() {
       UNIQUE(user_id, replica_id)
     );
   `);
+
+  // Migration: add columns that may not exist in older DBs
+  try { db.exec('ALTER TABLE replicas ADD COLUMN media_id TEXT DEFAULT \'\''); } catch {}
+  try { db.exec('ALTER TABLE replicas ADD COLUMN duration REAL DEFAULT 0'); } catch {}
 }
 
 // --- User queries ---
@@ -139,7 +145,7 @@ function getReplicaById(id) {
   return db.prepare('SELECT * FROM replicas WHERE id = ?').get(id);
 }
 
-function upsertReplica(characterId, filename, transcript, translation, filePath, sortOrder) {
+function upsertReplica(characterId, mediaId, filename, transcript, translation, filePath, sortOrder, duration) {
   const db = getDb();
   const existing = db.prepare(
     'SELECT id FROM replicas WHERE character_id = ? AND filename = ?'
@@ -147,15 +153,15 @@ function upsertReplica(characterId, filename, transcript, translation, filePath,
 
   if (existing) {
     db.prepare(`
-      UPDATE replicas SET transcript = ?, translation = ?, file_path = ?, sort_order = ?
+      UPDATE replicas SET media_id = ?, transcript = ?, translation = ?, file_path = ?, sort_order = ?, duration = ?
       WHERE id = ?
-    `).run(transcript, translation, filePath, sortOrder, existing.id);
+    `).run(mediaId, transcript, translation, filePath, sortOrder, duration || 0, existing.id);
     return existing.id;
   } else {
     return db.prepare(`
-      INSERT INTO replicas (character_id, filename, transcript, translation, file_path, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(characterId, filename, transcript, translation, filePath, sortOrder).lastInsertRowid;
+      INSERT INTO replicas (character_id, media_id, filename, transcript, translation, file_path, sort_order, duration)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(characterId, mediaId, filename, transcript, translation, filePath, sortOrder, duration || 0).lastInsertRowid;
   }
 }
 

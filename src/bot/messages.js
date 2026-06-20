@@ -13,9 +13,10 @@ const MSG = {
   noCharacters: '❌ В этом проекте нет персонажей.',
 
   // Replica
-  replicaHeader: (transcript, translation, submitted, total) =>
-    `🎬 *Реплика*\n\n` +
-    `🇬🇧 *EN:* ${transcript}\n` +
+  replicaHeader: (mediaId, transcript, translation, submitted, total, duration) =>
+    `🎬 *Реплика #${mediaId}*\n` +
+    (duration ? `⏱ Длительность: ${duration.toFixed(1)}с\n` : '') +
+    `\n🇬🇧 *EN:* ${transcript}\n` +
     `🇷🇺 *RU:* ${translation}\n\n` +
     `📊 Прогресс: ${submitted}/${total}`,
 

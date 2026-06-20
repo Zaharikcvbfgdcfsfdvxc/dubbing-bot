@@ -1,2 +1,0 @@
-line01.wav	The wind is howling.	Ветер воет.
-line02.wav	I hate portals.	Ненавижу порталы.

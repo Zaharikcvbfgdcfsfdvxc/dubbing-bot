@@ -195,7 +195,7 @@ async function sendNextReplica(ctx, character) {
   const total = db.getTotalReplicasCount(character.id);
 
   await ctx.reply(
-    MSG.replicaHeader(replica.transcript, replica.translation, submitted, total),
+    MSG.replicaHeader(replica.media_id || replica.filename, replica.transcript, replica.translation, submitted, total, replica.duration),
     {
       parse_mode: 'Markdown',
       reply_markup: dubbingKeyboard(character.id),

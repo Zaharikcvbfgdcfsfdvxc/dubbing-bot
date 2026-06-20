@@ -1,6 +1,6 @@
 const fs = require('fs');
 const path = require('path');
-const parseTranscriptText = require('../utils/transcriptParser');
+const { parseReplicaTranscript } = require('../utils/transcriptParser');
 const db = require('../db/index');
 
 const DATA_DIR = path.join(__dirname, '..', '..', 'data');
@@ -24,7 +24,14 @@ function verifyWavHeader(filePath) {
 
 /**
  * Scan the data/ directory and populate the database.
- * Structure: data/{project}/transcript.txt + data/{project}/{character}/*.wav
+ *
+ * Structure:
+ *   data/
+ *     {project_name}/
+ *       {media_id}/
+ *         original.wav      ← audio file
+ *         transcript.txt    ← Оригинал: / Перевод:
+ *         info.json         ← { media_id, character, duration }
  */
 function scanDataDir() {
   if (!fs.existsSync(DATA_DIR)) {
@@ -45,19 +52,11 @@ function scanDataDir() {
   let characterCount = 0;
   let replicaCount = 0;
 
+  // Track characters per project for uniqueness
+  const charCache = new Map(); // key: "projectId:charName" → character id
+
   for (const projectName of projectFolders) {
     const projectPath = path.join(DATA_DIR, projectName);
-
-    // Find transcript.txt
-    const transcriptPath = path.join(projectPath, 'transcript.txt');
-    let transcriptMap = new Map();
-    if (fs.existsSync(transcriptPath)) {
-      const text = fs.readFileSync(transcriptPath, 'utf-8');
-      transcriptMap = parseTranscriptText(text);
-      console.log(`[scanner] Parsed ${transcriptMap.size} entries from ${projectName}/transcript.txt`);
-    } else {
-      console.log(`[scanner] No transcript.txt in ${projectName}, skipping transcript parsing`);
-    }
 
     // Upsert project
     db.upsertProject(projectName, projectPath);
@@ -65,57 +64,88 @@ function scanDataDir() {
     if (!project) continue;
     projectCount++;
 
-    // Scan character subfolders
+    // Scan media_id subfolders
     const entries = fs.readdirSync(projectPath).filter(name => {
       const fullPath = path.join(projectPath, name);
       return fs.statSync(fullPath).isDirectory();
     });
 
-    for (const characterName of entries) {
-      const characterPath = path.join(projectPath, characterName);
+    // Group replicas by character (from info.json)
+    let replicaIndex = 0;
 
-      // Get WAV files
-      const wavFiles = fs.readdirSync(characterPath).filter(f => /\.wav$/i.test(f));
+    for (const mediaId of entries) {
+      const replicaPath = path.join(projectPath, mediaId);
+      const audioFile = path.join(replicaPath, 'original.wav');
+      const transcriptFile = path.join(replicaPath, 'transcript.txt');
+      const infoFile = path.join(replicaPath, 'info.json');
 
-      if (wavFiles.length === 0) {
-        console.log(`[scanner] No WAV files in ${projectName}/${characterName}, skipping`);
+      // Skip if no audio file
+      if (!fs.existsSync(audioFile)) {
+        console.log(`[scanner] Skipping ${projectName}/${mediaId}: no original.wav`);
         continue;
       }
 
-      // Upsert character
-      db.upsertCharacter(project.id, characterName, characterPath);
-      const character = db.getDb().prepare(
-        'SELECT id FROM characters WHERE project_id = ? AND name = ?'
-      ).get(project.id, characterName);
-      if (!character) continue;
-      characterCount++;
-
-      // Add replicas
-      wavFiles.sort((a, b) => a.localeCompare(b, 'ru', { numeric: true }));
-
-      wavFiles.forEach((filename, index) => {
-        const filePath = path.join(characterPath, filename);
-        const key = filename.replace(/\.wav$/i, '').toLowerCase();
-        const info = transcriptMap.get(key) || transcriptMap.get(filename.toLowerCase()) || {};
-        const isBroken = !verifyWavHeader(filePath);
-
-        if (isBroken) {
-          console.log(`[scanner] WARNING: ${filename} has invalid WAV header`);
+      // Read info.json
+      let info = { media_id: mediaId, character: 'Unknown', duration: 0 };
+      if (fs.existsSync(infoFile)) {
+        try {
+          info = JSON.parse(fs.readFileSync(infoFile, 'utf-8'));
+        } catch (err) {
+          console.log(`[scanner] WARNING: invalid info.json in ${projectName}/${mediaId}`);
         }
+      }
 
-        db.upsertReplica(
-          character.id,
-          filename,
-          info.transcript || '',
-          info.translation || '',
-          filePath,
-          index
-        );
-        replicaCount++;
-      });
+      const characterName = info.character || 'Unknown';
+      const duration = info.duration || 0;
 
-      console.log(`[scanner] ${projectName}/${characterName}: ${wavFiles.length} replicas`);
+      // Read transcript
+      let transcript = '';
+      let translation = '';
+      if (fs.existsSync(transcriptFile)) {
+        const text = fs.readFileSync(transcriptFile, 'utf-8');
+        const parsed = parseReplicaTranscript(text);
+        transcript = parsed.transcript;
+        translation = parsed.translation;
+      }
+
+      // Validate WAV
+      if (!verifyWavHeader(audioFile)) {
+        console.log(`[scanner] WARNING: ${projectName}/${mediaId}/original.wav has invalid header`);
+      }
+
+      // Upsert character (get or create)
+      const cacheKey = `${project.id}:${characterName}`;
+      let characterId = charCache.get(cacheKey);
+      if (!characterId) {
+        db.upsertCharacter(project.id, characterName, replicaPath);
+        const character = db.getDb().prepare(
+          'SELECT id FROM characters WHERE project_id = ? AND name = ?'
+        ).get(project.id, characterName);
+        if (character) {
+          characterId = character.id;
+          charCache.set(cacheKey, characterId);
+          characterCount++;
+        }
+      }
+
+      if (!characterId) continue;
+
+      // Upsert replica
+      db.upsertReplica(
+        characterId,
+        String(mediaId),
+        'original.wav',
+        transcript,
+        translation,
+        audioFile,
+        replicaIndex,
+        duration
+      );
+      replicaIndex++;
+      replicaCount++;
     }
+
+    console.log(`[scanner] ${projectName}: ${entries.length} media folders, ${replicaCount} replicas total`);
   }
 
   console.log(`[scanner] Done: ${projectCount} projects, ${characterCount} characters, ${replicaCount} replicas`);

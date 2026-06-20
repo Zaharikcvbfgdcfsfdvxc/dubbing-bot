@@ -112,4 +112,27 @@ function parseTranscriptText(text) {
   return map;
 }
 
-module.exports = parseTranscriptText;
+/**
+ * Parse a single replica transcript.txt (new format).
+ * Format:
+ *   Оригинал:
+ *   English text
+ *
+ *   Перевод:
+ *   Russian text
+ *
+ * @param {string} text
+ * @returns {{ transcript: string, translation: string }}
+ */
+function parseReplicaTranscript(text) {
+  const normalized = text.replace(/\r\n/g, '\n');
+  const originalMatch = normalized.match(/Оригинал:\s*\n([\s\S]+?)(?:\n\nПеревод:|$)/i);
+  const translationMatch = normalized.match(/Перевод:\s*\n([\s\S]+?)$/i);
+
+  return {
+    transcript: originalMatch ? originalMatch[1].trim() : '',
+    translation: translationMatch ? translationMatch[1].trim() : ''
+  };
+}
+
+module.exports = { parseTranscriptText, parseReplicaTranscript };

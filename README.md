@@ -33,9 +33,10 @@ src/
     transcriptParser.js        ← парсер TXT-транскрипций
 data/
   {project}/
-    transcript.txt             ← транскрипции (EN + RU)
-    {character}/
-      *.wav                    ← реплики
+    {media_id}/
+      original.wav             ← аудио реплики
+      transcript.txt           ← Оригинал: / Перевод:
+      info.json                ← {media_id, character, duration}
 ```
 
 ## Установка
@@ -90,10 +91,10 @@ docker run -e BOT_TOKEN="..." -v $(pwd)/data:/app/data dubbing-bot
 1. Подготовь ZIP-архив со структурой:
    ```
    ProjectName/
-     transcript.txt
-     CharacterName/
-       line01.wav
-       line02.wav
+     {media_id}/
+       original.wav
+       transcript.txt
+       info.json
    ```
 2. Отправь `/upload` боту и пришли ZIP
 3. Бот распакует и проиндексирует
@@ -101,30 +102,26 @@ docker run -e BOT_TOKEN="..." -v $(pwd)/data:/app/data dubbing-bot
 ### Формат transcript.txt
 
 ```
-# Tab-формат
-line01.wav   EN text   RU text
+Оригинал:
+English text here
 
-# Pipe-формат
-line01.wav | EN text | RU text
-
-# Блочный формат
-Media ID: line01.wav
-EN: English text
-RU: Русский текст
----
+Перевод:
+Русский текст здесь
 ```
 
 ## Структура данных на сервере
 
 ```
 data/
-  Witcher3/
-    transcript.txt
-    Geralt/
-      line01.wav
-      line02.wav
-    Yennefer/
-      line01.wav
+  CaptainAmerica/
+    1005818535/
+      original.wav
+      transcript.txt
+      info.json
+    1006008518/
+      original.wav
+      transcript.txt
+      info.json
 ```
 
 Достаточно скопировать папки в `data/` и выполнить `/rescan`.
