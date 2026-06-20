@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Dubbing Bot — панель</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+    header { background: #1e293b; padding: 16px 24px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; }
+    header h1 { font-size: 1.4rem; color: #38bdf8; }
+    header .stats { font-size: 0.85rem; color: #94a3b8; }
+    main { max-width: 1100px; margin: 0 auto; padding: 16px; }
+    .project { margin-bottom: 20px; }
+    .project-header { font-size: 1.2rem; font-weight: 700; color: #38bdf8; padding: 10px 0; border-bottom: 1px solid #334155; margin-bottom: 8px; cursor: pointer; user-select: none; }
+    .project-header:hover { color: #7dd3fc; }
+    .character { margin-left: 16px; margin-bottom: 12px; }
+    .character-header { font-size: 1rem; font-weight: 600; color: #a78bfa; padding: 6px 0; cursor: pointer; user-select: none; }
+    .character-header:hover { color: #c4b5fd; }
+    .replicas { margin-left: 20px; display: none; }
+    .replicas.open { display: block; }
+    .replica { background: #1e293b; border: 1px solid #334155; border-radius: 10px; padding: 12px 16px; margin-bottom: 8px; display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
+    .replica-id { font-weight: 700; color: #facc15; min-width: 80px; }
+    .replica-text { flex: 1; min-width: 200px; }
+    .replica-text .en { color: #e2e8f0; font-size: 0.95rem; }
+    .replica-text .ru { color: #94a3b8; font-size: 0.85rem; margin-top: 2px; }
+    .replica-recordings { flex: 1; min-width: 200px; }
+    .recording { display: flex; align-items: center; gap: 8px; padding: 4px 0; font-size: 0.85rem; }
+    .recording .user { color: #4ade80; min-width: 100px; }
+    .recording audio { height: 28px; width: 180px; }
+    .recording .time { color: #64748b; font-size: 0.75rem; }
+    .no-dub { color: #475569; font-style: italic; font-size: 0.85rem; }
+    .tabs { display: flex; gap: 4px; margin-bottom: 16px; }
+    .tab { padding: 8px 16px; border-radius: 8px 8px 0 0; background: #1e293b; border: 1px solid #334155; color: #94a3b8; cursor: pointer; font-size: 0.9rem; }
+    .tab.active { background: #334155; color: #e2e8f0; border-bottom-color: #334155; }
+    .loading { text-align: center; padding: 40px; color: #64748b; }
+    .empty { text-align: center; padding: 40px; color: #475569; }
+    audio { background: #0f172a; border-radius: 6px; }
+    @media (max-width: 600px) { .replica { flex-direction: column; } .recording audio { width: 100%; } }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>🎙️ Dubbing Bot</h1>
+    <div class="stats" id="stats"></div>
+  </header>
+  <main>
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('dubs')">🎤 Записи</button>
+      <button class="tab" onclick="switchTab('replicas')">📋 Реплики</button>
+    </div>
+    <div id="content"><div class="loading">Загрузка...</div></div>
+  </main>
+
+  <script>
+    let currentTab = 'dubs';
+
+    async function switchTab(tab) {
+      currentTab = tab;
+      document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.textContent.includes(tab === 'dubs' ? 'Записи' : 'Реплики')));
+      await loadData();
+    }
+
+    async function loadData() {
+      const content = document.getElementById('content');
+      content.innerHTML = '<div class="loading">Загрузка...</div>';
+
+      try {
+        const url = currentTab === 'dubs' ? '/api/dubs' : '/api/replicas';
+        const res = await fetch(url);
+        const data = await res.json();
+        renderData(data);
+      } catch (e) {
+        content.innerHTML = '<div class="empty">Ошибка загрузки</div>';
+      }
+    }
+
+    function renderData(data) {
+      const content = document.getElementById('content');
+      const projects = Object.keys(data);
+
+      if (projects.length === 0) {
+        content.innerHTML = '<div class="empty">Нет данных</div>';
+        return;
+      }
+
+      let totalDubs = 0;
+      let totalReplicas = 0;
+      let html = '';
+
+      for (const projectName of projects) {
+        html += `<div class="project"><div class="project-header" onclick="toggle(this)">📁 ${esc(projectName)}</div>`;
+        const chars = data[projectName];
+
+        for (const charName of Object.keys(chars)) {
+          const replicas = chars[charName];
+          html += `<div class="character"><div class="character-header" onclick="toggle(this)">🎭 ${esc(charName)} (${replicas.length})</div>`;
+          html += '<div class="replicas open">';
+
+          for (const r of replicas) {
+            totalReplicas++;
+            html += `<div class="replica">`;
+            html += `<div class="replica-id">#${esc(String(r.media_id || '—'))}</div>`;
+
+            if (currentTab === 'replicas' || r.transcript !== undefined) {
+              html += `<div class="replica-text"><div class="en">🇬🇧 ${esc(r.transcript || '—')}</div><div class="ru">🇷🇺 ${esc(r.translation || '—')}</div></div>`;
+            }
+
+            html += '<div class="replica-recordings">';
+            if (currentTab === 'dubs' && r.user) {
+              totalDubs++;
+              const audioSrc = r.audio_path ? `/api/audio?path=${encodeURIComponent(r.audio_path)}` : '';
+              html += `<div class="recording"><span class="user">${esc(r.user)}</span>`;
+              if (audioSrc) {
+                html += `<audio controls preload="none"><source src="${audioSrc}" type="audio/ogg"></audio>`;
+              }
+              html += `<span class="time">${esc(r.created_at || '')}</span></div>`;
+            } else if (currentTab === 'dubs') {
+              html += '<div class="no-dub">не записано</div>';
+            }
+            html += '</div></div>';
+          }
+
+          html += '</div></div>';
+        }
+        html += '</div>';
+      }
+
+      content.innerHTML = html;
+      document.getElementById('stats').textContent =
+        `📁 ${projects.length} проектов | 🎤 ${totalDubs} записей | 📋 ${totalReplicas} реплик`;
+    }
+
+    function toggle(el) {
+      const repl = el.parentElement.querySelector('.replicas');
+      if (repl) repl.classList.toggle('open');
+    }
+
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+    loadData();
+  </script>
+</body>
+</html>
