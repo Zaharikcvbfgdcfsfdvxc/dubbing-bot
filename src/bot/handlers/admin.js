@@ -79,8 +79,8 @@ async function doAssign(ctx, input) {
   ctx.session._adminAction = ctx.session._adminCharId = null;
   let telegramId;
   if (input.startsWith('@')) {
-    const rows = await db.getDb().query('SELECT * FROM users WHERE username = ?', [input.slice(1)]);
-    const user = rows[0];
+    const [userRows] = await db.getDb().query('SELECT * FROM users WHERE username = ?', [input.slice(1)]);
+    const user = userRows[0];
     if (!user) return ctx.reply('❌ @' + input.slice(1) + ' не найден. Сначала /start боту.', { reply_markup: new InlineKeyboard().text('↩️ Назад', 'admin:back') });
     telegramId = user.telegram_id;
   } else {

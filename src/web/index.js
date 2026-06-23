@@ -51,7 +51,8 @@ app.post('/api/reject', async (req, res) => {
 });
 
 app.get('/api/replicas', async (req, res) => {
-  const rows = await db.getDb().query(`
+  const pool = db.getDb();
+  const [rows] = await pool.query(`
     SELECT p.name as project, c.name as character, r.media_id, r.transcript, r.translation, r.duration
     FROM replicas r JOIN characters c ON r.character_id = c.id JOIN projects p ON c.project_id = p.id
     ORDER BY p.name, c.name, r.sort_order

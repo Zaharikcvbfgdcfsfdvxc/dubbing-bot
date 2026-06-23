@@ -17,7 +17,7 @@
     "express": "^4.17.1",
     "jszip": "^3.10.1",
     "grammy": "^1.21.0",
-    "mysql": "^2.18.1"
+    "mysql2": "^3.10.0"
   },
   "devDependencies": {
     "nodemon": "^2.0.7"

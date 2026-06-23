@@ -1,5 +1,4 @@
-const mysql = require('mysql');
-const util = require('util');
+const mysql = require('mysql2/promise');
 
 const DB_CONFIG = {
   host: process.env.DB_HOST || 'localhost',
@@ -11,16 +10,17 @@ const DB_CONFIG = {
 
 let pool;
 
-function getPool() {
+async function getPool() {
   if (!pool) {
     pool = mysql.createPool(DB_CONFIG);
-    pool.query = util.promisify(pool.query);
   }
   return pool;
 }
 
-function query(sql, params) {
-  return getPool().query(sql, params || []);
+async function query(sql, params) {
+  var p = await getPool();
+  var [rows] = await p.query(sql, params || []);
+  return rows;
 }
 
 async function queryOne(sql, params) {
