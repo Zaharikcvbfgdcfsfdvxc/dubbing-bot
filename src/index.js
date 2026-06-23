@@ -1,13 +1,20 @@
-const { createBot } = require('./bot/index');
-const { startWeb } = require('./web/index');
+const { initDb } = require('./db/index');
 
-const { bot, startBot } = createBot();
+async function main() {
+  await initDb();
 
-startWeb(bot);
+  const { createBot } = require('./bot/index');
+  const { startWeb } = require('./web/index');
 
-if (startBot) {
-  startBot();
-} else {
-  console.error('Bot token not configured. Set BOT_TOKEN environment variable.');
-  process.exit(1);
+  const { bot, startBot } = createBot();
+  startWeb(bot);
+
+  if (startBot) {
+    startBot();
+  } else {
+    console.error('Bot token not configured.');
+    process.exit(1);
+  }
 }
+
+main().catch(err => { console.error(err); process.exit(1); });
