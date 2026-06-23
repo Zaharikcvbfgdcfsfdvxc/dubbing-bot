@@ -10,9 +10,15 @@ const DB_CONFIG = {
 
 let pool;
 
+var tablesReady = false;
+
 async function getPool() {
   if (!pool) {
     pool = mysql.createPool(DB_CONFIG);
+  }
+  if (!tablesReady) {
+    await initTables();
+    tablesReady = true;
   }
   return pool;
 }
