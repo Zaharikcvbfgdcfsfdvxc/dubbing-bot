@@ -86,12 +86,11 @@ function createBot() {
   });
 
   // --- Startup ---
-  function startBot() {
+  async function startBot() {
     console.log('[bot] Starting Telegram bot (long polling)...');
 
-    // Scan data directory first
     try {
-      scanDataDir();
+      await scanDataDir();
     } catch (err) {
       console.error('[bot] Failed to scan data directory:', err.message);
     }

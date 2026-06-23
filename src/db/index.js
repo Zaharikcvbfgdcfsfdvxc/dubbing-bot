@@ -1,446 +1,189 @@
-const path = require('path');
-const fs = require('fs');
+const mysql = require('mysql');
+const util = require('util');
 
-const DB_PATH = path.join(__dirname, '..', '..', 'data', 'dubbing.db');
+const DB_CONFIG = {
+  host: process.env.DB_HOST || 'localhost',
+  user: process.env.DB_USER || 'u3551263_default',
+  password: process.env.DB_PASS || '',
+  database: process.env.DB_NAME || 'u3551263_default',
+  connectionLimit: 5,
+};
 
-let db;
-let SQL; // sql.js module
+let pool;
 
-// --- Helpers wrapping sql.js ---
-
-function run(sql, params = []) {
-  db.run(sql, params);
-  const r = db.exec('SELECT last_insert_rowid()');
-  const lastInsertRowid = r.length > 0 && r[0].values.length > 0 ? r[0].values[0][0] : null;
-  return { lastInsertRowid, changes: db.getRowsModified() };
-}
-
-function get(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  let row;
-  if (stmt.step()) {
-    const cols = stmt.getColumnNames();
-    const vals = stmt.get();
-    row = {};
-    for (let i = 0; i < cols.length; i++) row[cols[i]] = vals[i];
+function getPool() {
+  if (!pool) {
+    pool = mysql.createPool(DB_CONFIG);
+    pool.query = util.promisify(pool.query);
   }
-  stmt.free();
-  return row;
+  return pool;
 }
 
-function all(sql, params = []) {
-  const stmt = db.prepare(sql);
-  stmt.bind(params);
-  const rows = [];
-  while (stmt.step()) {
-    const cols = stmt.getColumnNames();
-    const vals = stmt.get();
-    const row = {};
-    for (let i = 0; i < cols.length; i++) row[cols[i]] = vals[i];
-    rows.push(row);
-  }
-  stmt.free();
-  return rows;
+function query(sql, params) {
+  return getPool().query(sql, params || []);
 }
 
-function exec(sql) {
-  return db.exec(sql);
+async function queryOne(sql, params) {
+  var rows = await query(sql, params || []);
+  return rows[0] || null;
 }
 
-// --- Persistence ---
-
-function saveDb() {
-  const data = db.export();
-  const buffer = Buffer.from(data);
-  const dir = path.dirname(DB_PATH);
-  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-  fs.writeFileSync(DB_PATH, buffer);
-}
-
-// --- Init ---
-
-async function initDb() {
-  const initSqlJs = require('sql.js');
-  SQL = await initSqlJs();
-
-  if (fs.existsSync(DB_PATH)) {
-    const buffer = fs.readFileSync(DB_PATH);
-    db = new SQL.Database(buffer);
-  } else {
-    db = new SQL.Database();
-  }
-
-  exec('PRAGMA foreign_keys = ON');
-
-  exec(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      telegram_id INTEGER UNIQUE NOT NULL,
-      username TEXT,
-      first_name TEXT,
-      last_name TEXT,
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-    )
-  `);
-
-  exec(`
-    CREATE TABLE IF NOT EXISTS projects (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT UNIQUE NOT NULL,
-      folder_path TEXT NOT NULL
-    )
-  `);
-
-  exec(`
-    CREATE TABLE IF NOT EXISTS characters (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      name TEXT NOT NULL,
-      folder_path TEXT NOT NULL,
-      assigned_telegram_id INTEGER DEFAULT NULL,
-      preview_limit INTEGER DEFAULT 0,
-      UNIQUE(project_id, name)
-    )
-  `);
-
-  exec(`
-    CREATE TABLE IF NOT EXISTS replicas (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      character_id INTEGER NOT NULL REFERENCES characters(id) ON DELETE CASCADE,
-      media_id TEXT DEFAULT '',
-      filename TEXT NOT NULL,
-      transcript TEXT DEFAULT '',
-      translation TEXT DEFAULT '',
-      file_path TEXT NOT NULL,
-      duration REAL DEFAULT 0,
-      sort_order INTEGER DEFAULT 0
-    )
-  `);
-
-  exec(`
-    CREATE TABLE IF NOT EXISTS user_dubs (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      user_id INTEGER NOT NULL,
-      replica_id INTEGER NOT NULL REFERENCES replicas(id) ON DELETE CASCADE,
-      audio_path TEXT,
-      status TEXT DEFAULT 'pending',
-      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-      UNIQUE(user_id, replica_id)
-    )
-  `);
-
-  saveDb();
-  console.log('[db] SQLite initialized via sql.js');
+async function initTables() {
+  await query("CREATE TABLE IF NOT EXISTS users (id INT AUTO_INCREMENT PRIMARY KEY, telegram_id BIGINT UNIQUE NOT NULL, username VARCHAR(255), first_name VARCHAR(255), last_name VARCHAR(255), created_at DATETIME DEFAULT CURRENT_TIMESTAMP)");
+  await query("CREATE TABLE IF NOT EXISTS projects (id INT AUTO_INCREMENT PRIMARY KEY, name VARCHAR(255) UNIQUE NOT NULL, folder_path TEXT NOT NULL)");
+  await query("CREATE TABLE IF NOT EXISTS characters (id INT AUTO_INCREMENT PRIMARY KEY, project_id INT NOT NULL, name VARCHAR(255) NOT NULL, folder_path TEXT NOT NULL, assigned_telegram_id BIGINT DEFAULT NULL, preview_limit INT DEFAULT 0, UNIQUE KEY unique_char (project_id, name), FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE)");
+  await query("CREATE TABLE IF NOT EXISTS replicas (id INT AUTO_INCREMENT PRIMARY KEY, character_id INT NOT NULL, media_id VARCHAR(100) DEFAULT '', filename VARCHAR(255) NOT NULL, transcript TEXT, translation TEXT, file_path TEXT NOT NULL, duration FLOAT DEFAULT 0, sort_order INT DEFAULT 0, FOREIGN KEY (character_id) REFERENCES characters(id) ON DELETE CASCADE)");
+  await query("CREATE TABLE IF NOT EXISTS user_dubs (id INT AUTO_INCREMENT PRIMARY KEY, user_id INT NOT NULL, replica_id INT NOT NULL, audio_path TEXT, status VARCHAR(20) DEFAULT 'pending', created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE KEY unique_dub (user_id, replica_id), FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE, FOREIGN KEY (replica_id) REFERENCES replicas(id) ON DELETE CASCADE)");
+  console.log('[db] MySQL tables ready');
 }
 
 // --- User queries ---
 
-function upsertUser(telegramId, username, firstName, lastName) {
-  const existing = get('SELECT id FROM users WHERE telegram_id = ?', [telegramId]);
-  if (existing) {
-    run('UPDATE users SET username = COALESCE(?, username), first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name) WHERE telegram_id = ?',
-      [username, firstName, lastName, telegramId]);
-  } else {
-    run('INSERT INTO users (telegram_id, username, first_name, last_name) VALUES (?, ?, ?, ?)',
-      [telegramId, username, firstName, lastName]);
-  }
-  saveDb();
+async function upsertUser(telegramId, username, firstName, lastName) {
+  await query("INSERT INTO users (telegram_id, username, first_name, last_name) VALUES (?, ?, ?, ?) ON DUPLICATE KEY UPDATE username = COALESCE(?, username), first_name = COALESCE(?, first_name), last_name = COALESCE(?, last_name)", [telegramId, username || null, firstName || null, lastName || null, username || null, firstName || null, lastName || null]);
 }
 
-function getUserByTelegramId(telegramId) {
-  return get('SELECT * FROM users WHERE telegram_id = ?', [telegramId]);
+async function getUserByTelegramId(telegramId) {
+  return queryOne('SELECT * FROM users WHERE telegram_id = ?', [telegramId]);
 }
 
 // --- Project queries ---
 
-function getAllProjects() {
-  return all('SELECT * FROM projects ORDER BY name');
-}
+async function getAllProjects() { return query('SELECT * FROM projects ORDER BY name'); }
+async function getProjectById(id) { return queryOne('SELECT * FROM projects WHERE id = ?', [id]); }
 
-function getProjectById(id) {
-  return get('SELECT * FROM projects WHERE id = ?', [id]);
-}
-
-function upsertProject(name, folderPath) {
-  const existing = get('SELECT id FROM projects WHERE name = ?', [name]);
-  if (existing) {
-    run('UPDATE projects SET folder_path = ? WHERE name = ?', [folderPath, name]);
-  } else {
-    run('INSERT INTO projects (name, folder_path) VALUES (?, ?)', [name, folderPath]);
-  }
-  saveDb();
+async function upsertProject(name, folderPath) {
+  await query("INSERT INTO projects (name, folder_path) VALUES (?, ?) ON DUPLICATE KEY UPDATE folder_path = VALUES(folder_path)", [name, folderPath]);
 }
 
 // --- Character queries ---
 
-function getCharactersByProject(projectId) {
-  return all('SELECT * FROM characters WHERE project_id = ? ORDER BY name', [projectId]);
-}
+async function getCharactersByProject(projectId) { return query('SELECT * FROM characters WHERE project_id = ? ORDER BY name', [projectId]); }
+async function getCharacterById(id) { return queryOne('SELECT * FROM characters WHERE id = ?', [id]); }
 
-function getCharacterById(id) {
-  return get('SELECT * FROM characters WHERE id = ?', [id]);
-}
-
-function upsertCharacter(projectId, name, folderPath) {
-  const existing = get('SELECT id FROM characters WHERE project_id = ? AND name = ?', [projectId, name]);
-  if (existing) {
-    run('UPDATE characters SET folder_path = ? WHERE id = ?', [folderPath, existing.id]);
-  } else {
-    run('INSERT INTO characters (project_id, name, folder_path) VALUES (?, ?, ?)', [projectId, name, folderPath]);
-  }
-  saveDb();
+async function upsertCharacter(projectId, name, folderPath) {
+  await query("INSERT INTO characters (project_id, name, folder_path) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE folder_path = VALUES(folder_path)", [projectId, name, folderPath]);
 }
 
 // --- Replica queries ---
 
-function getReplicasByCharacter(characterId) {
-  return all('SELECT * FROM replicas WHERE character_id = ? ORDER BY sort_order, filename', [characterId]);
+async function getReplicasByCharacter(cId) { return query('SELECT * FROM replicas WHERE character_id = ? ORDER BY sort_order, filename', [cId]); }
+async function getReplicaById(id) { return queryOne('SELECT * FROM replicas WHERE id = ?', [id]); }
+
+async function upsertReplica(characterId, mediaId, filename, transcript, translation, filePath, sortOrder, duration) {
+  var result = await query("INSERT INTO replicas (character_id, media_id, filename, transcript, translation, file_path, sort_order, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON DUPLICATE KEY UPDATE filename = VALUES(filename), transcript = VALUES(transcript), translation = VALUES(translation), file_path = VALUES(file_path), sort_order = VALUES(sort_order), duration = VALUES(duration)", [characterId, String(mediaId), filename, transcript, translation, filePath, sortOrder || 0, duration || 0]);
+  return result.insertId;
 }
 
-function getReplicaById(id) {
-  return get('SELECT * FROM replicas WHERE id = ?', [id]);
+// --- User dubs ---
+
+async function getOrCreateDub(userId, replicaId) {
+  var row = await queryOne('SELECT * FROM user_dubs WHERE user_id = ? AND replica_id = ?', [userId, replicaId]);
+  if (row) return row;
+  await query("INSERT INTO user_dubs (user_id, replica_id, status) VALUES (?, ?, 'pending')", [userId, replicaId]);
+  return queryOne('SELECT * FROM user_dubs WHERE user_id = ? AND replica_id = ?', [userId, replicaId]);
 }
 
-function upsertReplica(characterId, mediaId, filename, transcript, translation, filePath, sortOrder, duration) {
-  const existing = get('SELECT id FROM replicas WHERE character_id = ? AND media_id = ?', [characterId, mediaId]);
-  if (existing) {
-    run('UPDATE replicas SET filename = ?, transcript = ?, translation = ?, file_path = ?, sort_order = ?, duration = ? WHERE id = ?',
-      [filename, transcript, translation, filePath, sortOrder, duration || 0, existing.id]);
-    return existing.id;
-  } else {
-    return run('INSERT INTO replicas (character_id, media_id, filename, transcript, translation, file_path, sort_order, duration) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [characterId, String(mediaId), filename, transcript, translation, filePath, sortOrder, duration || 0]).lastInsertRowid;
-  }
+async function submitDub(dubId, audioPath) {
+  await query("UPDATE user_dubs SET status = 'submitted', audio_path = ?, created_at = NOW() WHERE id = ?", [audioPath || '', dubId]);
 }
 
-// --- User dubs queries ---
-
-function getOrCreateDub(userId, replicaId) {
-  const existing = get('SELECT * FROM user_dubs WHERE user_id = ? AND replica_id = ?', [userId, replicaId]);
-  if (existing) return existing;
-  run('INSERT INTO user_dubs (user_id, replica_id, status) VALUES (?, ?, ?)', [userId, replicaId, 'pending']);
-  return get('SELECT * FROM user_dubs WHERE user_id = ? AND replica_id = ?', [userId, replicaId]);
+async function discardDub(dubId) {
+  await query("UPDATE user_dubs SET status = 'pending', audio_path = NULL WHERE id = ?", [dubId]);
 }
 
-function submitDub(dubId, audioPath) {
-  run("UPDATE user_dubs SET status = 'submitted', audio_path = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?",
-    [audioPath, dubId]);
-  saveDb();
+async function rejectDub(dubId) {
+  await query("UPDATE user_dubs SET status = 'rejected' WHERE id = ?", [dubId]);
 }
 
-function discardDub(dubId) {
-  run("UPDATE user_dubs SET status = 'pending', audio_path = NULL WHERE id = ?", [dubId]);
-  saveDb();
+async function getDubById(dubId) {
+  return queryOne("SELECT d.*, r.media_id, r.transcript, c.name as character_name, p.name as project_name, u.telegram_id, u.username FROM user_dubs d JOIN users u ON d.user_id = u.id JOIN replicas r ON d.replica_id = r.id JOIN characters c ON r.character_id = c.id JOIN projects p ON c.project_id = p.id WHERE d.id = ?", [dubId]);
 }
 
-function rejectDub(dubId) {
-  run("UPDATE user_dubs SET status = 'rejected' WHERE id = ?", [dubId]);
-  saveDb();
+async function getNextPendingReplica(userId, characterId) {
+  return queryOne("SELECT r.* FROM replicas r WHERE r.character_id = ? AND r.id NOT IN (SELECT replica_id FROM user_dubs WHERE user_id = ? AND status = 'submitted') ORDER BY r.sort_order, r.filename LIMIT 1", [characterId, userId]);
 }
 
-function getDubById(dubId) {
-  return get(`
-    SELECT d.*, r.media_id, r.transcript, c.name as character_name, p.name as project_name,
-           u.telegram_id, u.username
-    FROM user_dubs d
-    JOIN users u ON d.user_id = u.id
-    JOIN replicas r ON d.replica_id = r.id
-    JOIN characters c ON r.character_id = c.id
-    JOIN projects p ON c.project_id = p.id
-    WHERE d.id = ?
-  `, [dubId]);
+async function getRejectedReplicas(userId, characterId) {
+  return query("SELECT r.*, d.id as dub_id, d.status as dub_status FROM replicas r JOIN user_dubs d ON d.replica_id = r.id WHERE r.character_id = ? AND d.user_id = ? AND d.status = 'rejected' ORDER BY r.sort_order, r.filename", [characterId, userId]);
 }
 
-function getNextPendingReplica(userId, characterId) {
-  return get(`
-    SELECT r.* FROM replicas r
-    WHERE r.character_id = ?
-      AND r.id NOT IN (
-        SELECT replica_id FROM user_dubs
-        WHERE user_id = ? AND status = 'submitted'
-      )
-    ORDER BY r.sort_order, r.filename
-    LIMIT 1
-  `, [characterId, userId]);
-}
-
-function getRejectedReplicas(userId, characterId) {
-  return all(`
-    SELECT r.*, d.id as dub_id, d.status as dub_status
-    FROM replicas r
-    JOIN user_dubs d ON d.replica_id = r.id
-    WHERE r.character_id = ? AND d.user_id = ? AND d.status = 'rejected'
-    ORDER BY r.sort_order, r.filename
-  `, [characterId, userId]);
-}
-
-function getPendingCount(userId, characterId) {
-  const r = get(`
-    SELECT COUNT(*) as count FROM replicas r
-    WHERE r.character_id = ?
-      AND r.id NOT IN (
-        SELECT replica_id FROM user_dubs
-        WHERE user_id = ? AND status = 'submitted'
-      )
-  `, [characterId, userId]);
+async function getPendingCount(userId, characterId) {
+  var r = await queryOne("SELECT COUNT(*) as count FROM replicas r WHERE r.character_id = ? AND r.id NOT IN (SELECT replica_id FROM user_dubs WHERE user_id = ? AND status = 'submitted')", [characterId, userId]);
   return r ? r.count : 0;
 }
 
-function getSubmittedCount(userId, characterId) {
-  const r = get(`
-    SELECT COUNT(*) as count FROM user_dubs
-    WHERE user_id = ? AND replica_id IN (
-      SELECT id FROM replicas WHERE character_id = ?
-    ) AND status = 'submitted'
-  `, [userId, characterId]);
+async function getSubmittedCount(userId, characterId) {
+  var r = await queryOne("SELECT COUNT(*) as count FROM user_dubs WHERE user_id = ? AND replica_id IN (SELECT id FROM replicas WHERE character_id = ?) AND status = 'submitted'", [userId, characterId]);
   return r ? r.count : 0;
 }
 
-function getTotalReplicasCount(characterId) {
-  const r = get('SELECT COUNT(*) as count FROM replicas WHERE character_id = ?', [characterId]);
+async function getTotalReplicasCount(characterId) {
+  var r = await queryOne('SELECT COUNT(*) as count FROM replicas WHERE character_id = ?', [characterId]);
   return r ? r.count : 0;
 }
 
 // --- Cleanup ---
 
-function clearProjectData() {
-  run('DELETE FROM replicas');
-  run('DELETE FROM characters');
-  run('DELETE FROM projects');
-  saveDb();
+async function clearProjectData() {
+  await query('DELETE FROM user_dubs');
+  await query('DELETE FROM replicas');
+  await query('DELETE FROM characters');
+  await query('DELETE FROM projects');
 }
 
-function clearOrphanedReplicas() {
-  run("DELETE FROM replicas WHERE id NOT IN (SELECT DISTINCT replica_id FROM user_dubs)");
-  saveDb();
+async function clearOrphanedReplicas() {
+  await query("DELETE FROM replicas WHERE id NOT IN (SELECT DISTINCT replica_id FROM user_dubs)");
 }
 
-// --- Assignment queries ---
+// --- Assignments ---
 
-function assignUserToCharacter(characterId, telegramId) {
-  run('UPDATE characters SET assigned_telegram_id = ? WHERE id = ?', [telegramId, characterId]);
-  saveDb();
+async function assignUserToCharacter(charId, telegramId) { await query('UPDATE characters SET assigned_telegram_id = ? WHERE id = ?', [telegramId, charId]); }
+async function unassignCharacter(charId) { await query('UPDATE characters SET assigned_telegram_id = NULL WHERE id = ?', [charId]); }
+async function setPreviewLimit(charId, limit) { await query('UPDATE characters SET preview_limit = ? WHERE id = ?', [limit, charId]); }
+
+async function getCharactersWithAssignments(projectId) {
+  return query("SELECT c.*, u.username as assigned_username, u.first_name as assigned_first_name FROM characters c LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id WHERE c.project_id = ? ORDER BY c.name", [projectId]);
 }
 
-function unassignCharacter(characterId) {
-  run('UPDATE characters SET assigned_telegram_id = NULL WHERE id = ?', [characterId]);
-  saveDb();
+async function getAssignmentByCharacter(charId) {
+  return queryOne("SELECT c.*, u.username as assigned_username, u.first_name as assigned_first_name FROM characters c LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id WHERE c.id = ?", [charId]);
 }
 
-function setPreviewLimit(characterId, limit) {
-  run('UPDATE characters SET preview_limit = ? WHERE id = ?', [limit, characterId]);
-  saveDb();
+async function getAllCharactersWithAssignments() {
+  return query("SELECT c.*, p.name as project_name, u.username as assigned_username, u.first_name as assigned_first_name FROM characters c JOIN projects p ON c.project_id = p.id LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id ORDER BY p.name, c.name");
 }
 
-function getCharactersWithAssignments(projectId) {
-  return all(`
-    SELECT c.*, u.username as assigned_username, u.first_name as assigned_first_name
-    FROM characters c
-    LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id
-    WHERE c.project_id = ?
-    ORDER BY c.name
-  `, [projectId]);
+// --- Reports ---
+
+async function getDubsReport(charId) {
+  return query("SELECT u.telegram_id, u.username, u.first_name, r.media_id, r.transcript, d.status, d.audio_path, d.created_at FROM user_dubs d JOIN users u ON d.user_id = u.id JOIN replicas r ON d.replica_id = r.id WHERE r.character_id = ? ORDER BY u.username, r.sort_order", [charId]);
 }
 
-function getAssignmentByCharacter(characterId) {
-  return get(`
-    SELECT c.*, u.username as assigned_username, u.first_name as assigned_first_name
-    FROM characters c
-    LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id
-    WHERE c.id = ?
-  `, [characterId]);
-}
-
-function getAllCharactersWithAssignments() {
-  return all(`
-    SELECT c.*, p.name as project_name, u.username as assigned_username, u.first_name as assigned_first_name
-    FROM characters c
-    JOIN projects p ON c.project_id = p.id
-    LEFT JOIN users u ON c.assigned_telegram_id = u.telegram_id
-    ORDER BY p.name, c.name
-  `);
-}
-
-// --- Dubs report ---
-
-function getDubsReport(characterId) {
-  return all(`
-    SELECT u.telegram_id, u.username, u.first_name, r.media_id, r.transcript,
-           d.status, d.audio_path, d.created_at
-    FROM user_dubs d
-    JOIN users u ON d.user_id = u.id
-    JOIN replicas r ON d.replica_id = r.id
-    WHERE r.character_id = ?
-    ORDER BY u.username, r.sort_order
-  `, [characterId]);
-}
-
-function getAllDubsReport() {
-  return all(`
-    SELECT d.id as dub_id, p.name as project, c.name as character, r.media_id,
-           u.username, u.first_name, u.telegram_id,
-           d.status, d.audio_path, d.created_at
-    FROM user_dubs d
-    JOIN users u ON d.user_id = u.id
-    JOIN replicas r ON d.replica_id = r.id
-    JOIN characters c ON r.character_id = c.id
-    JOIN projects p ON c.project_id = p.id
-    WHERE d.status = 'submitted'
-    ORDER BY p.name, c.name, r.sort_order
-  `);
+async function getAllDubsReport() {
+  return query("SELECT d.id as dub_id, p.name as project, c.name as character, r.media_id, u.username, u.first_name, u.telegram_id, d.status, d.audio_path, d.created_at FROM user_dubs d JOIN users u ON d.user_id = u.id JOIN replicas r ON d.replica_id = r.id JOIN characters c ON r.character_id = c.id JOIN projects p ON c.project_id = p.id WHERE d.status = 'submitted' ORDER BY p.name, c.name, r.sort_order");
 }
 
 // --- Stats ---
 
-function getStats() {
-  return {
-    users: get('SELECT COUNT(*) as count FROM users').count,
-    projects: get('SELECT COUNT(*) as count FROM projects').count,
-    characters: get('SELECT COUNT(*) as count FROM characters').count,
-    replicas: get('SELECT COUNT(*) as count FROM replicas').count,
-    submittedDubs: get("SELECT COUNT(*) as count FROM user_dubs WHERE status = 'submitted'").count,
-  };
+async function getStats() {
+  var u = await queryOne('SELECT COUNT(*) as count FROM users');
+  var p = await queryOne('SELECT COUNT(*) as count FROM projects');
+  var c = await queryOne('SELECT COUNT(*) as count FROM characters');
+  var r = await queryOne('SELECT COUNT(*) as count FROM replicas');
+  var d = await queryOne("SELECT COUNT(*) as count FROM user_dubs WHERE status = 'submitted'");
+  return { users: u.count, projects: p.count, characters: c.count, replicas: r.count, submittedDubs: d.count };
 }
 
-function getDb() {
-  return db;
-}
+function getDb() { return pool; }
 
 module.exports = {
-  initDb,
-  getDb,
-  saveDb,
-  upsertUser,
-  getUserByTelegramId,
-  getAllProjects,
-  getProjectById,
-  upsertProject,
-  getCharactersByProject,
-  getCharacterById,
-  upsertCharacter,
-  getReplicasByCharacter,
-  getReplicaById,
-  upsertReplica,
-  getOrCreateDub,
-  submitDub,
-  discardDub,
-  rejectDub,
-  getDubById,
-  getNextPendingReplica,
-  getRejectedReplicas,
-  getPendingCount,
-  getSubmittedCount,
-  getTotalReplicasCount,
-  clearProjectData,
-  clearOrphanedReplicas,
-  assignUserToCharacter,
-  unassignCharacter,
-  setPreviewLimit,
-  getCharactersWithAssignments,
-  getAssignmentByCharacter,
-  getAllCharactersWithAssignments,
-  getDubsReport,
-  getAllDubsReport,
-  getStats,
+  initDb: initTables,
+  getDb, upsertUser, getUserByTelegramId, getAllProjects, getProjectById, upsertProject,
+  getCharactersByProject, getCharacterById, upsertCharacter, getReplicasByCharacter, getReplicaById, upsertReplica,
+  getOrCreateDub, submitDub, discardDub, rejectDub, getDubById, getNextPendingReplica, getRejectedReplicas,
+  getPendingCount, getSubmittedCount, getTotalReplicasCount, clearProjectData, clearOrphanedReplicas,
+  assignUserToCharacter, unassignCharacter, setPreviewLimit,
+  getCharactersWithAssignments, getAssignmentByCharacter, getAllCharactersWithAssignments,
+  getDubsReport, getAllDubsReport, getStats,
 };
