@@ -86,8 +86,7 @@ async function handleDocument(ctx) {
 
   try {
     const file = await ctx.api.getFile(doc.file_id);
-    const baseUrl = process.env.PROXY_URL || 'https://api.telegram.org';
-    const fileUrl = `${baseUrl}/file/bot${ctx.api.token}/${file.file_path}`;
+    const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
     const zipBuffer = await downloadBuffer(fileUrl);
     const zip = await JSZip.loadAsync(zipBuffer);
 
