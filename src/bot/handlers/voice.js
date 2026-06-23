@@ -31,7 +31,8 @@ async function handleVoice(ctx) {
 
   try {
     const file = await ctx.api.getFile(voice.file_id);
-    const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
+    const baseUrl = process.env.PROXY_URL || 'https://api.telegram.org';
+    const fileUrl = `${baseUrl}/file/bot${ctx.api.token}/${file.file_path}`;
 
     const userDir = path.join(RECORDINGS_DIR, String(ctx.from.id));
     ensureDir(userDir);

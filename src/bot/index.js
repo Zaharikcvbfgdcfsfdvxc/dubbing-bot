@@ -7,19 +7,24 @@ const { handleAdminCommand, handleAdminCallback, handleAdminMessage } = require(
 const { scanDataDir } = require('./scanner');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
+const PROXY_URL = process.env.PROXY_URL || '';
 
 /**
  * Create and configure the Telegram bot.
- * @returns {{ bot: Bot, startBot: Function }}
  */
 function createBot() {
   if (!BOT_TOKEN) {
     console.error('[bot] BOT_TOKEN environment variable is not set!');
-    console.error('[bot] Set it with: $env:BOT_TOKEN="your_token_here" or in .env file');
     return { bot: null, startBot: () => {} };
   }
 
-  const bot = new Bot(BOT_TOKEN);
+  const botOptions = {};
+  if (PROXY_URL) {
+    botOptions.client = { apiRoot: PROXY_URL };
+    console.log('[bot] Using proxy:', PROXY_URL);
+  }
+
+  const bot = new Bot(BOT_TOKEN, botOptions);
 
   // Session configuration
   bot.use(session({
