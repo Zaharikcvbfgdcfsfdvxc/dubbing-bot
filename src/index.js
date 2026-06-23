@@ -7,7 +7,10 @@ async function main() {
   const { startWeb } = require('./web/index');
 
   const { bot, startBot } = createBot();
-  startWeb(bot);
+
+  if (process.env.NO_WEB !== '1') {
+    startWeb(bot);
+  }
 
   if (startBot) {
     startBot();
