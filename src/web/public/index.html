@@ -155,11 +155,19 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ dubId })
         });
+        const data = await res.json();
         if (res.ok) {
+          if (data.notified) {
+            console.log('Reject OK, notification sent');
+          } else {
+            console.warn('Reject OK, but notification failed:', data.reason);
+          }
           loadData();
+        } else {
+          alert('Ошибка отбраковки: ' + (data.error || res.status));
         }
       } catch (e) {
-        alert('Ошибка');
+        alert('Ошибка сети: ' + e.message);
       }
     }
 
