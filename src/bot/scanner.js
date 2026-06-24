@@ -36,8 +36,11 @@ async function scanDataDir() {
 
   await db.clearProjectData();
 
+  // Directories that are NOT projects (recordings, etc.)
+  const SKIP_DIRS = new Set(['recordings']);
+
   const projectFolders = fs.readdirSync(DATA_DIR).filter(name =>
-    fs.statSync(path.join(DATA_DIR, name)).isDirectory()
+    fs.statSync(path.join(DATA_DIR, name)).isDirectory() && !SKIP_DIRS.has(name)
   );
 
   let projectCount = 0, characterCount = 0, replicaCount = 0;
