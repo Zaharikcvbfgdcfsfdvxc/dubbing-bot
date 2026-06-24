@@ -11,6 +11,7 @@
     "list": "node src/cli.js list",
     "dubs": "node src/cli.js dubs",
     "recordings": "node src/cli.js recordings",
+    "cleanup": "node src/cli.js cleanup",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {

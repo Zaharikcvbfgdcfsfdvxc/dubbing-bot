@@ -55,7 +55,44 @@ const command = process.argv[2] || 'help';
       }
       break;
     }
+    case 'cleanup': {
+      const path = require('path'), fs = require('fs');
+      const recDir = path.join(__dirname, '..', 'data', 'recordings');
+      if (!fs.existsSync(recDir)) { console.log('No recordings directory.'); break; }
+
+      // Collect all audio_path values from DB
+      const dubs = await db.getAllDubsReport();
+      const dbPaths = new Set(dubs.filter(d => d.audio_path).map(d => path.resolve(d.audio_path)));
+
+      let deletedFiles = 0, deletedDirs = 0, keptFiles = 0;
+      for (const uid of fs.readdirSync(recDir)) {
+        const userDir = path.join(recDir, uid);
+        if (!fs.statSync(userDir).isDirectory()) continue;
+
+        const files = fs.readdirSync(userDir).filter(f => f.endsWith('.ogg'));
+        for (const f of files) {
+          const fullPath = path.resolve(path.join(userDir, f));
+          if (dbPaths.has(fullPath)) {
+            keptFiles++;
+          } else {
+            fs.unlinkSync(path.join(userDir, f));
+            console.log(`  Deleted orphan: ${uid}/${f}`);
+            deletedFiles++;
+          }
+        }
+
+        // Remove empty user directory
+        const remaining = fs.readdirSync(userDir).filter(f => f.endsWith('.ogg'));
+        if (remaining.length === 0) {
+          fs.rmdirSync(userDir);
+          console.log(`  Removed empty dir: ${uid}/`);
+          deletedDirs++;
+        }
+      }
+      console.log(`Cleanup done: ${deletedFiles} files deleted, ${deletedDirs} dirs removed, ${keptFiles} kept`);
+      break;
+    }
     default:
-      console.log('Dubbing Bot CLI\n  scan   stats   list   dubs   recordings');
+      console.log('Dubbing Bot CLI\n  scan   stats   list   dubs   recordings   cleanup');
   }
 })().catch(err => { console.error(err); process.exit(1); });
