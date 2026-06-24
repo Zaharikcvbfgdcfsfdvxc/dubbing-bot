@@ -81,7 +81,7 @@ async function sendNextReplica(ctx, character) {
         ctx.session.state = 'SELECTING_CHARACTER';
         ctx.session.characterId = null;
         return ctx.reply(
-          `🔒 *${character.name}* — только для назначенного пользователя.\nТы можешь озвучить первые ${charInfo.preview_limit} реплик (уже: ${submitted}).\nВыбери другого:`,
+          `🔒 *${character.name}* — только для назначенного пользователя.\nВы можете озвучить первые ${charInfo.preview_limit} реплик (уже: ${submitted}).\nВыберите другого:`,
           { parse_mode: 'Markdown', reply_markup: characterListKeyboard(await db.getCharactersByProject(ctx.session.projectId)) }
         );
       }
@@ -116,7 +116,7 @@ async function handleSubmit(ctx, dubId, characterId) {
   ctx.session.state = 'DUBBING';
   if (!ctx.session._lastVoicePath) {
     ctx.session.currentDubId = null;
-    return ctx.reply('❌ Запись не найдена. Отправь голосовое заново.', { parse_mode: 'Markdown' });
+    return ctx.reply('❌ Запись не найдена. Отправьте голосовое заново.', { parse_mode: 'Markdown' });
   }
   await db.submitDub(dubId, ctx.session._lastVoicePath);
   ctx.session.currentDubId = ctx.session._lastVoicePath = null;

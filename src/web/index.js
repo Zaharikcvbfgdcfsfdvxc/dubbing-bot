@@ -56,9 +56,9 @@ app.post('/api/reject', async (req, res) => {
     }
 
     const msg = `❌ <b>Отбраковка</b>\n\n` +
-      `Твоя запись реплики <b>#${info.media_id}</b> ` +
+      `Ваша запись реплики <b>#${info.media_id}</b> ` +
       `(${info.project_name} / ${info.character_name}) была отбракована.\n\n` +
-      `Отправь /start → выбери персонажа → перезапиши эту реплику.`;
+      `Отправьте /start → выберите персонажа → перезапишите эту реплику.`;
 
     console.log(`[web] Sending reject notification to telegram_id=${info.telegram_id}`);
     try {

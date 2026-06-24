@@ -56,6 +56,7 @@ async function upsertUser(telegramId, username, firstName, lastName) {
   saveDb();
 }
 async function getUserByTelegramId(id) { return get('SELECT * FROM users WHERE telegram_id = ?', [id]); }
+async function getUserByUsername(username) { return get('SELECT * FROM users WHERE username = ?', [username]); }
 
 // --- Projects ---
 async function getAllProjects() { return all('SELECT * FROM projects ORDER BY name'); }
@@ -149,7 +150,7 @@ async function getStats() {
 function getDb() { return db; }
 
 module.exports = {
-  initDb, getDb, upsertUser, getUserByTelegramId, getAllProjects, getProjectById, upsertProject,
+  initDb, getDb, upsertUser, getUserByTelegramId, getUserByUsername, getAllProjects, getProjectById, upsertProject,
   getCharactersByProject, getCharacterById, upsertCharacter, getReplicasByCharacter, getReplicaById, upsertReplica,
   getOrCreateDub, submitDub, discardDub, rejectDub, getDubById, getNextPendingReplica, getRejectedReplicas,
   getPendingCount, getSubmittedCount, getTotalReplicasCount, clearProjectData, clearOrphanedReplicas,

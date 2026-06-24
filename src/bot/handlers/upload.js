@@ -21,7 +21,7 @@ async function handleUploadCommand(ctx) {
 
   return ctx.reply(
     '📦 *Загрузка проекта*\n\n' +
-    'Отправь ZIP-файл со структурой:\n\n' +
+    'Отправьте ZIP-файл со структурой:\n\n' +
     '```\n' +
     'ProjectName/\n' +
     '  {media_id}/\n' +
@@ -59,7 +59,7 @@ async function handleDocument(ctx) {
 
   if (!waitingForZip.has(userId)) {
     return ctx.reply(
-      'Чтобы загрузить проект, сначала отправь команду /upload'
+      'Чтобы загрузить проект, сначала отправьте команду /upload'
     );
   }
 
@@ -68,7 +68,7 @@ async function handleDocument(ctx) {
 
   const fileName = doc.file_name || '';
   if (!/\.zip$/i.test(fileName)) {
-    return ctx.reply('❌ Отправь ZIP-файл (с расширением .zip).');
+    return ctx.reply('❌ Отправьте ZIP-файл (с расширением .zip).');
   }
 
   // Telegram Bot API cannot download files > 20 MB
@@ -77,7 +77,7 @@ async function handleDocument(ctx) {
     const sizeMb = (doc.file_size / 1024 / 1024).toFixed(1);
     return ctx.reply(
       `❌ Файл слишком большой: ${sizeMb} МБ (макс. 20 МБ для ботов).\n\n` +
-      `Разбей архив на части или загрузи файлы напрямую в папку data/ на сервере.`
+      `Разбейте архив на части или загрузите файлы напрямую в папку data/ на сервере.`
     );
   }
 
@@ -126,7 +126,7 @@ async function handleDocument(ctx) {
       await ctx.api.deleteMessage(statusMsg.chat.id, statusMsg.message_id).catch(() => {});
       return ctx.reply(
         '📦 Архив содержит папку персонажа.\n\n' +
-        'Введи *название проекта*, в который добавить персонажа:\n\n' +
+        'Введите *название проекта*, в который добавить персонажа:\n\n' +
         `Найден персонаж: \`${topEntries[0]}\``,
         {
           parse_mode: 'Markdown',

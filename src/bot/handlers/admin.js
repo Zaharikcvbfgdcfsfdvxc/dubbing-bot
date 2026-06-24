@@ -64,13 +64,13 @@ async function showAssignMenu(ctx) {
   const kb = new InlineKeyboard();
   for (const c of items) kb.text(`${c.project_name}/${c.name} [${c.assigned_username || '—'}]`, `admin:assign:${c.id}`).row();
   kb.text('↩️ Назад', 'admin:back');
-  return ctx.reply('Выбери персонажа:', { reply_markup: kb });
+  return ctx.reply('Выберите персонажа:', { reply_markup: kb });
 }
 
 async function startAssign(ctx, charId) {
   ctx.session._adminAction = 'assign'; ctx.session._adminCharId = charId;
   const ch = await db.getAssignmentByCharacter(charId);
-  return ctx.reply(`👤 Назначение на *${ch.project_name || ''} / ${ch.name}*\nВведи Telegram ID или @username:`,
+  return ctx.reply(`👤 Назначение на *${ch.project_name || ''} / ${ch.name}*\nВведите Telegram ID или @username:`,
     { parse_mode: 'Markdown', reply_markup: new InlineKeyboard().text('↩️ Отмена', 'admin:back') });
 }
 
@@ -79,13 +79,12 @@ async function doAssign(ctx, input) {
   ctx.session._adminAction = ctx.session._adminCharId = null;
   let telegramId;
   if (input.startsWith('@')) {
-    const [userRows] = await db.getDb().query('SELECT * FROM users WHERE username = ?', [input.slice(1)]);
-    const user = userRows[0];
-    if (!user) return ctx.reply('❌ @' + input.slice(1) + ' не найден. Сначала /start боту.', { reply_markup: new InlineKeyboard().text('↩️ Назад', 'admin:back') });
+    const user = await db.getUserByUsername(input.slice(1));
+    if (!user) return ctx.reply('❌ @' + input.slice(1) + ' не найден. Сначала отправьте /start боту.', { reply_markup: new InlineKeyboard().text('↩️ Назад', 'admin:back') });
     telegramId = user.telegram_id;
   } else {
     telegramId = parseInt(input);
-    if (isNaN(telegramId)) return ctx.reply('❌ Введи ID или @username.', { reply_markup: new InlineKeyboard().text('↩️ Назад', 'admin:back') });
+    if (isNaN(telegramId)) return ctx.reply('❌ Введите ID или @username.', { reply_markup: new InlineKeyboard().text('↩️ Назад', 'admin:back') });
   }
   await db.assignUserToCharacter(charId, telegramId);
   await db.setPreviewLimit(charId, PREVIEW_DEFAULT);

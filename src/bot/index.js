@@ -66,7 +66,7 @@ function createBot() {
     const session = ctx.session;
     if (session.state === 'DUBBING') {
       return ctx.reply(
-        '🎤 Отправь голосовое сообщение (voice message), а не текст.\n\nИли начни заново: /start'
+        '🎤 Отправьте голосовое сообщение (voice message), а не текст.\n\nИли начните заново: /start'
       );
     }
     return next();
