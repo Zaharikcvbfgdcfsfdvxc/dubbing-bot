@@ -5,3 +5,4 @@ data/dubbing.db
 .env
 *.log
 .DS_Store
+CONTEXT.md
