@@ -133,6 +133,24 @@ async function scanDataDir() {
   }
 
   console.log(`[scanner] Done: ${projectCount} projects, ${characterCount} characters, ${replicaCount} replicas`);
+
+  // Cleanup: remove DB projects no longer on disk (only if no user_dubs)
+  const scannedNames = new Set(projectFolders);
+  const dbProjects = await db.getAllProjects();
+  let deletedProjects = 0;
+  for (const dbProj of dbProjects) {
+    if (!scannedNames.has(dbProj.name)) {
+      const removed = await db.deleteProject(dbProj.id);
+      if (removed) {
+        console.log(`[scanner] Removed deleted project: ${dbProj.name}`);
+        deletedProjects++;
+      } else {
+        console.log(`[scanner] Project ${dbProj.name} not on disk but has recordings — keeping`);
+      }
+    }
+  }
+  if (deletedProjects > 0) console.log(`[scanner] Cleaned up ${deletedProjects} removed project(s)`);
+
   return { projects: projectCount, characters: characterCount, replicas: replicaCount };
 }
 

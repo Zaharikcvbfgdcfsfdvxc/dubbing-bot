@@ -67,6 +67,18 @@ async function upsertProject(name, folderPath) {
   else run('INSERT INTO projects (name,folder_path) VALUES (?,?)', [name,folderPath]);
   saveDb();
 }
+async function deleteProject(id) {
+  // Check if any user_dubs exist for this project before cascading
+  var dubs = get("SELECT COUNT(*) as cnt FROM user_dubs d JOIN replicas r ON d.replica_id=r.id JOIN characters c ON r.character_id=c.id WHERE c.project_id=?", [id]);
+  if (dubs && dubs.cnt > 0) {
+    console.log(`[db] deleteProject: project ${id} has ${dubs.cnt} user_dubs, skipping`);
+    return false;
+  }
+  run('DELETE FROM characters WHERE project_id=?', [id]);
+  run('DELETE FROM projects WHERE id=?', [id]);
+  saveDb();
+  return true;
+}
 
 // --- Characters ---
 async function getCharactersByProject(pid) { return all('SELECT * FROM characters WHERE project_id=? ORDER BY name', [pid]); }
@@ -150,7 +162,7 @@ async function getStats() {
 function getDb() { return db; }
 
 module.exports = {
-  initDb, getDb, upsertUser, getUserByTelegramId, getUserByUsername, getAllProjects, getProjectById, upsertProject,
+  initDb, getDb, upsertUser, getUserByTelegramId, getUserByUsername, getAllProjects, getProjectById, upsertProject, deleteProject,
   getCharactersByProject, getCharacterById, upsertCharacter, getReplicasByCharacter, getReplicaById, upsertReplica,
   getOrCreateDub, submitDub, discardDub, rejectDub, getDubById, getNextPendingReplica, getRejectedReplicas,
   getPendingCount, getSubmittedCount, getTotalReplicasCount, clearProjectData, clearOrphanedReplicas,
