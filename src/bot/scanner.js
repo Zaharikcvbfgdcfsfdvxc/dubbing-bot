@@ -34,7 +34,9 @@ async function scanDataDir() {
     return { projects: 0, characters: 0, replicas: 0 };
   }
 
-  await db.clearProjectData();
+  // IMPORTANT: Do NOT clear user_dubs — they survive restarts.
+  // Only clear projects/characters/replicas (cascades from projects).
+  // Upsert preserves IDs for existing records, so user_dubs refs stay valid.
 
   // Directories that are NOT projects (recordings, etc.)
   const SKIP_DIRS = new Set(['recordings']);
