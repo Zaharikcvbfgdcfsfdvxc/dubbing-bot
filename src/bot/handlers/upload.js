@@ -3,7 +3,6 @@ const path = require('path');
 const JSZip = require('jszip');
 const { scanDataDir, DATA_DIR } = require('../scanner');
 const { downloadBuffer } = require('../utils');
-const { downloadThroughProxy, hasProxy } = require('../proxy');
 const MSG = require('../messages');
 
 // Track which users are in "waiting for ZIP" state (simple Set, not session-based)
@@ -88,7 +87,7 @@ async function handleDocument(ctx) {
   try {
     const file = await ctx.api.getFile(doc.file_id);
     const fileUrl = `https://api.telegram.org/file/bot${ctx.api.token}/${file.file_path}`;
-    const zipBuffer = hasProxy ? await downloadThroughProxy(fileUrl) : await downloadBuffer(fileUrl);
+    const zipBuffer = await downloadBuffer(fileUrl);
     const zip = await JSZip.loadAsync(zipBuffer);
 
     // Detect ZIP type: project (has character folders) or character (has media_id folders)

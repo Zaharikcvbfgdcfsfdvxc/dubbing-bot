@@ -4,7 +4,6 @@ const db = require('../../db/index');
 const MSG = require('../messages');
 const { reviewKeyboard } = require('../keyboards');
 const { downloadBuffer } = require('../utils');
-const { downloadThroughProxy, hasProxy } = require('../proxy');
 
 const RECORDINGS_DIR = path.join(__dirname, '..', '..', '..', 'data', 'recordings');
 
@@ -39,7 +38,7 @@ async function handleVoice(ctx) {
     const ext = file.file_path ? path.extname(file.file_path) : '.ogg';
     const destPath = path.join(userDir, `${Date.now()}_${voice.file_unique_id}${ext}`);
 
-    const voiceBuffer = hasProxy ? await downloadThroughProxy(fileUrl) : await downloadBuffer(fileUrl);
+    const voiceBuffer = await downloadBuffer(fileUrl);
     fs.writeFileSync(destPath, voiceBuffer);
 
     const replica = await db.getNextPendingReplica(user.id, ctx.session.characterId);

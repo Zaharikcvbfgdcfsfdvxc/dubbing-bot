@@ -5,7 +5,6 @@ const { handleVoice } = require('./handlers/voice');
 const { handleUploadCommand, handleDocument, handleUploadText } = require('./handlers/upload');
 const { handleAdminCommand, handleAdminCallback, handleAdminMessage } = require('./handlers/admin');
 const { scanDataDir } = require('./scanner');
-const { getBotOptions } = require('./proxy');
 
 const BOT_TOKEN = process.env.BOT_TOKEN || '';
 
@@ -15,7 +14,7 @@ function createBot() {
     return { bot: null, startBot: () => {} };
   }
 
-  const bot = new Bot(BOT_TOKEN, getBotOptions());
+  const bot = new Bot(BOT_TOKEN);
 
   // Session configuration
   bot.use(session({
