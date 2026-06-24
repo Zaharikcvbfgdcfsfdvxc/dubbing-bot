@@ -1,9 +1,11 @@
 const { scanDataDir } = require('./bot/scanner');
+const { initDb } = require('./db/index');
 const db = require('./db/index');
 
 const command = process.argv[2] || 'help';
 
 (async () => {
+  await initDb();
   switch (command) {
     case 'scan': {
       console.log('Scanning data/...');
