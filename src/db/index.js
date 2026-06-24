@@ -134,6 +134,7 @@ async function getAllCharactersWithAssignments() { return all("SELECT c.*, p.nam
 // --- Reports ---
 async function getDubsReport(cid) { return all("SELECT u.telegram_id, u.username, u.first_name, r.media_id, r.transcript, d.status, d.audio_path, d.created_at FROM user_dubs d JOIN users u ON d.user_id=u.id JOIN replicas r ON d.replica_id=r.id WHERE r.character_id=? ORDER BY u.username, r.sort_order", [cid]); }
 async function getAllDubsReport() { return all("SELECT d.id as dub_id, p.name as project, c.name as character, r.media_id, u.username, u.first_name, u.telegram_id, d.status, d.audio_path, d.created_at FROM user_dubs d JOIN users u ON d.user_id=u.id JOIN replicas r ON d.replica_id=r.id JOIN characters c ON r.character_id=c.id JOIN projects p ON c.project_id=p.id WHERE d.status='submitted' ORDER BY p.name, c.name, r.sort_order"); }
+async function getAllReplicasReport() { return all("SELECT p.name as project, c.name as character, r.media_id, r.transcript, r.translation, r.duration FROM replicas r JOIN characters c ON r.character_id=c.id JOIN projects p ON c.project_id=p.id ORDER BY p.name, c.name, r.sort_order"); }
 
 // --- Stats ---
 async function getStats() {
@@ -154,5 +155,5 @@ module.exports = {
   getPendingCount, getSubmittedCount, getTotalReplicasCount, clearProjectData, clearOrphanedReplicas,
   assignUserToCharacter, unassignCharacter, setPreviewLimit,
   getCharactersWithAssignments, getAssignmentByCharacter, getAllCharactersWithAssignments,
-  getDubsReport, getAllDubsReport, getStats,
+  getDubsReport, getAllDubsReport, getAllReplicasReport, getStats,
 };

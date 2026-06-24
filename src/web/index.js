@@ -28,42 +28,68 @@ app.get('/api/dubs', async (req, res) => {
 });
 
 app.post('/api/reject', async (req, res) => {
-  const { dubId } = req.body;
-  if (!dubId) return res.status(400).json({ error: 'dubId required' });
+  try {
+    const { dubId } = req.body;
+    if (!dubId) return res.status(400).json({ error: 'dubId required' });
 
-  await db.rejectDub(dubId);
-  const info = await db.getDubById(dubId);
+    console.log(`[web] Reject request for dubId=${dubId}`);
 
-  if (info && botInstance) {
+    await db.rejectDub(dubId);
+    console.log(`[web] dubId=${dubId} status set to rejected`);
+
+    const info = await db.getDubById(dubId);
+    console.log(`[web] getDubById(${dubId}):`, info ? `found, telegram_id=${info.telegram_id}` : 'NULL');
+
+    if (!info) {
+      console.error(`[web] dubId=${dubId} not found after reject!`);
+      return res.status(404).json({ error: 'Dub not found' });
+    }
+
+    if (!botInstance) {
+      console.error('[web] botInstance is null — notification skipped');
+      return res.json({ ok: true, dub: info, notified: false, reason: 'botInstance is null' });
+    }
+
+    if (!info.telegram_id) {
+      console.error(`[web] info.telegram_id is empty for dubId=${dubId}`);
+      return res.json({ ok: true, dub: info, notified: false, reason: 'telegram_id missing' });
+    }
+
     const msg = `❌ <b>Отбраковка</b>\n\n` +
       `Твоя запись реплики <b>#${info.media_id}</b> ` +
       `(${info.project_name} / ${info.character_name}) была отбракована.\n\n` +
       `Отправь /start → выбери персонажа → перезапиши эту реплику.`;
 
     console.log(`[web] Sending reject notification to telegram_id=${info.telegram_id}`);
-    botInstance.api.sendMessage(info.telegram_id, msg, { parse_mode: 'HTML' })
-      .then(() => console.log(`[web] Sent to ${info.telegram_id}`))
-      .catch(err => console.error('[web] Notify failed:', err.message));
-  } else {
-    console.log(`[web] Cannot notify: bot=${!!botInstance}, info=${!!info}`);
+    try {
+      await botInstance.api.sendMessage(info.telegram_id, msg, { parse_mode: 'HTML' });
+      console.log(`[web] Notification sent to ${info.telegram_id}`);
+      res.json({ ok: true, dub: info, notified: true });
+    } catch (sendErr) {
+      console.error('[web] sendMessage failed:', sendErr.message);
+      if (sendErr.error) console.error('[web] Telegram API error:', JSON.stringify(sendErr.error));
+      res.json({ ok: true, dub: info, notified: false, reason: sendErr.message });
+    }
+  } catch (err) {
+    console.error('[web] /api/reject error:', err.message);
+    res.status(500).json({ error: 'Internal server error', detail: err.message });
   }
-  res.json({ ok: true, dub: info });
 });
 
 app.get('/api/replicas', async (req, res) => {
-  const pool = db.getDb();
-  const [rows] = await pool.query(`
-    SELECT p.name as project, c.name as character, r.media_id, r.transcript, r.translation, r.duration
-    FROM replicas r JOIN characters c ON r.character_id = c.id JOIN projects p ON c.project_id = p.id
-    ORDER BY p.name, c.name, r.sort_order
-  `);
-  const projects = {};
-  for (const r of rows) {
-    if (!projects[r.project]) projects[r.project] = {};
-    if (!projects[r.project][r.character]) projects[r.project][r.character] = [];
-    projects[r.project][r.character].push({ media_id: r.media_id, transcript: r.transcript, translation: r.translation, duration: r.duration });
+  try {
+    const rows = await db.getAllReplicasReport();
+    const projects = {};
+    for (const r of rows) {
+      if (!projects[r.project]) projects[r.project] = {};
+      if (!projects[r.project][r.character]) projects[r.project][r.character] = [];
+      projects[r.project][r.character].push({ media_id: r.media_id, transcript: r.transcript, translation: r.translation, duration: r.duration });
+    }
+    res.json(projects);
+  } catch (err) {
+    console.error('[web] /api/replicas error:', err.message);
+    res.status(500).json({ error: 'Internal server error' });
   }
-  res.json(projects);
 });
 
 app.get('/api/audio', (req, res) => {
